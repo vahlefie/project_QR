@@ -1,0 +1,378 @@
+{% extends "user_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Staff</h3>
+
+    {% if message %}
+        <p class="success-text">{{ message }}</p>
+    {% endif %}
+
+    {% if error %}
+        <p class="danger-text">{{ error }}</p>
+    {% endif %}
+
+    <form action="{{ url_for('client_staff.user_staff') }}" method="POST" class="user-form" id="staffForm">
+        <div class="form-grid">
+            <label>
+                <span>Nomor HP</span>
+                <div class="phone-input">
+                    <span>+62</span>
+                    <input
+                        id="staffPhoneLocalInput"
+                        type="text"
+                        inputmode="numeric"
+                        minlength="8"
+                        pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                        title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                        value="{% if form_data.get('no_hp', '').startswith('62') %}{{ form_data.get('no_hp', '')[2:] }}{% else %}{{ form_data.get('no_hp', '') }}{% endif %}"
+                        required
+                    >
+                    <input id="staffPhoneFullInput" type="hidden" name="no_hp">
+                </div>
+            </label>
+            <label>
+                <span>Nama</span>
+                <input type="text" name="nama" value="{{ form_data.get('nama', '') }}" maxlength="35" required>
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit">Tambah Staff</button>
+        </div>
+    </form>
+</div>
+
+<div class="card staff-list-card">
+    <h3>Daftar Staff</h3>
+
+    {% if not staff_members %}
+        <p>Belum ada staff.</p>
+    {% else %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Nomor HP</th>
+                        <th>Nama</th>
+                        <th>Action</th>
+                        <th>Log</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for staff in staff_members %}
+                    {% set staff_state = staff_states.get(staff.id, {}) %}
+                    <tr data-staff-row="{{ staff.id }}">
+                        <td>{{ loop.index }}</td>
+                        <td>{{ staff.no_hp }}</td>
+                        <td>{{ staff.nama }}</td>
+                        <td>
+                            <div class="action-group">
+                                <form
+                                    action="{{ url_for('client_staff.login_staff', staff_id=staff.id) }}"
+                                    method="POST"
+                                    class="inline-action-form staff-login-form {% if staff_state.get('is_active') or staff_state.get('is_blocked') %}is-hidden{% endif %}"
+                                    target="_blank"
+                                    data-staff-id="{{ staff.id }}"
+                                >
+                                    <button type="submit" class="table-action-button">Login</button>
+                                </form>
+                                <form
+                                    action="{{ url_for('client_staff.logout_staff_from_client', staff_id=staff.id) }}"
+                                    method="POST"
+                                    class="inline-action-form staff-logout-form {% if not staff_state.get('is_active') or staff_state.get('is_blocked') %}is-hidden{% endif %}"
+                                    data-staff-id="{{ staff.id }}"
+                                >
+                                    <button type="submit" class="success-button table-action-button">
+                                        Logout
+                                    </button>
+                                </form>
+                                <form
+                                    action="{{ url_for('client_staff.block_staff', staff_id=staff.id) }}"
+                                    method="POST"
+                                    class="inline-action-form staff-block-form {% if staff_state.get('is_blocked') %}is-hidden{% endif %}"
+                                    data-staff-id="{{ staff.id }}"
+                                >
+                                    <button
+                                        type="button"
+                                        class="danger-button table-action-button staff-block-button"
+                                        data-action="{{ url_for('client_staff.block_staff', staff_id=staff.id) }}"
+                                        data-staff-name="{{ staff.nama }}"
+                                    >
+                                        Block
+                                    </button>
+                                </form>
+                                <form
+                                    action="{{ url_for('client_staff.unblock_staff', staff_id=staff.id) }}"
+                                    method="POST"
+                                    class="inline-action-form staff-unblock-form {% if not staff_state.get('is_blocked') %}is-hidden{% endif %}"
+                                    data-staff-id="{{ staff.id }}"
+                                >
+                                    <button type="submit" class="secondary-button table-action-button">
+                                        Unblock
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                        <td>
+                            <button
+                                type="button"
+                                class="secondary-button table-action-button staff-log-button"
+                                data-log-url="{{ url_for('client_staff.user_staff_logs', staff_id=staff.id) }}"
+                            >
+                                View
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+
+<div
+    id="blockStaffModal"
+    class="confirm-modal is-hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="blockStaffTitle"
+>
+    <div class="confirm-dialog">
+        <h4 id="blockStaffTitle">Block Staff</h4>
+        <p class="modal-message" id="blockStaffMessage">Yakin ingin memblokir staff ini?</p>
+        <form id="blockStaffConfirmForm" method="POST" class="confirm-actions">
+            <button type="submit" class="danger-button">Ya</button>
+            <button type="button" class="secondary-button" id="cancelBlockStaff">Batal</button>
+        </form>
+    </div>
+</div>
+
+<div
+    id="staffLogModal"
+    class="confirm-modal is-hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="staffLogTitle"
+>
+    <div class="confirm-dialog detail-dialog staff-log-dialog">
+        <div class="detail-header">
+            <div>
+                <h4 id="staffLogTitle">Log Aktivitas Staff</h4>
+            </div>
+        </div>
+        <div id="staffLogContent" class="staff-log-content">
+            <p class="muted">Memuat log...</p>
+        </div>
+        <div class="detail-actions">
+            <button type="button" class="secondary-button" id="downloadStaffLog">Download</button>
+            <button type="button" class="danger-button" id="closeStaffLog">Tutup</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const staffForm = document.getElementById("staffForm");
+const staffPhoneLocalInput = document.getElementById("staffPhoneLocalInput");
+const staffPhoneFullInput = document.getElementById("staffPhoneFullInput");
+const blockStaffModal = document.getElementById("blockStaffModal");
+const blockStaffConfirmForm = document.getElementById("blockStaffConfirmForm");
+const blockStaffMessage = document.getElementById("blockStaffMessage");
+const cancelBlockStaff = document.getElementById("cancelBlockStaff");
+const staffLogModal = document.getElementById("staffLogModal");
+const staffLogTitle = document.getElementById("staffLogTitle");
+const staffLogContent = document.getElementById("staffLogContent");
+const downloadStaffLog = document.getElementById("downloadStaffLog");
+const closeStaffLog = document.getElementById("closeStaffLog");
+const staffStatusUrl = "{{ url_for('client_staff.user_staff_status') }}";
+let activeStaffLogPayload = null;
+
+staffForm.addEventListener("submit", () => {
+    let localNumber = staffPhoneLocalInput.value.trim();
+    if (localNumber.startsWith("62")) {
+        localNumber = localNumber.slice(2);
+    }
+    if (localNumber.startsWith("0")) {
+        localNumber = localNumber.slice(1);
+    }
+    staffPhoneFullInput.value = `62${localNumber}`;
+});
+
+const toggleElement = (element, isVisible) => {
+    if (!element) {
+        return;
+    }
+    element.classList.toggle("is-hidden", !isVisible);
+};
+
+const setStaffRowState = (staffId, state) => {
+    const row = document.querySelector(`[data-staff-row="${staffId}"]`);
+    if (!row) {
+        return;
+    }
+
+    const isBlocked = Boolean(state.is_blocked);
+    const isActive = Boolean(state.is_active);
+    toggleElement(row.querySelector(".staff-login-form"), !isBlocked && !isActive);
+    toggleElement(row.querySelector(".staff-logout-form"), !isBlocked && isActive);
+    toggleElement(row.querySelector(".staff-block-form"), !isBlocked);
+    toggleElement(row.querySelector(".staff-unblock-form"), isBlocked);
+};
+
+document.querySelectorAll(".staff-login-form").forEach((form) => {
+    form.addEventListener("submit", () => {
+        setStaffRowState(form.dataset.staffId, { is_active: true, is_blocked: false });
+    });
+});
+
+const openBlockModal = (button) => {
+    blockStaffConfirmForm.action = button.dataset.action;
+    blockStaffMessage.textContent = `Yakin ingin memblokir ${button.dataset.staffName}?`;
+    blockStaffModal.classList.remove("is-hidden");
+    blockStaffModal.setAttribute("aria-hidden", "false");
+};
+
+const closeBlockModal = () => {
+    blockStaffModal.classList.add("is-hidden");
+    blockStaffModal.setAttribute("aria-hidden", "true");
+    blockStaffConfirmForm.removeAttribute("action");
+};
+
+document.querySelectorAll(".staff-block-button").forEach((button) => {
+    button.addEventListener("click", () => openBlockModal(button));
+});
+
+cancelBlockStaff.addEventListener("click", closeBlockModal);
+blockStaffModal.addEventListener("click", (event) => {
+    if (event.target === blockStaffModal) {
+        closeBlockModal();
+    }
+});
+
+const escapeText = (value) => {
+    const element = document.createElement("span");
+    element.textContent = value;
+    return element.innerHTML;
+};
+
+const openStaffLogModal = async (button) => {
+    staffLogTitle.textContent = "Log Aktivitas Staff";
+    staffLogContent.innerHTML = '<p class="muted">Memuat log...</p>';
+    activeStaffLogPayload = null;
+    staffLogModal.classList.remove("is-hidden");
+    staffLogModal.setAttribute("aria-hidden", "false");
+
+    try {
+        const response = await fetch(button.dataset.logUrl, { headers: { "Accept": "application/json" } });
+        if (!response.ok) {
+            staffLogContent.innerHTML = '<p class="danger-text">Log staff tidak bisa dimuat.</p>';
+            return;
+        }
+
+        const payload = await response.json();
+        activeStaffLogPayload = payload;
+        staffLogTitle.textContent = payload.title || "Log Aktivitas Staff";
+
+        if (!payload.entries || payload.entries.length === 0) {
+            staffLogContent.innerHTML = '<p class="muted">Belum ada aktivitas staff hari ini.</p>';
+            return;
+        }
+
+        staffLogContent.innerHTML = payload.entries.map((entry) => `
+            <div class="staff-log-entry">
+                <strong>${escapeText(entry.time || "-")}</strong>
+                <p>${escapeText(entry.message || "Staff melakukan aktivitas pada sistem.")}</p>
+            </div>
+        `).join("");
+    } catch (error) {
+        staffLogContent.innerHTML = '<p class="danger-text">Log staff tidak bisa dimuat.</p>';
+    }
+};
+
+const buildStaffLogText = () => {
+    if (!activeStaffLogPayload) {
+        return "Log Aktivitas Staff\n\nLog belum dimuat.";
+    }
+
+    const lines = [activeStaffLogPayload.title || "Log Aktivitas Staff"];
+    const entries = activeStaffLogPayload.entries || [];
+    if (entries.length === 0) {
+        lines.push("", "Belum ada aktivitas staff hari ini.");
+        return lines.join("\n");
+    }
+
+    entries.forEach((entry) => {
+        lines.push("", entry.time || "-", entry.message || "Staff melakukan aktivitas pada sistem.");
+    });
+    return lines.join("\n");
+};
+
+const padTwoDigits = (value) => String(value).padStart(2, "0");
+
+const buildStaffLogFileName = () => {
+    const staffName = (activeStaffLogPayload?.staff_name || "staff")
+        .trim()
+        .replace(/\s+/g, "_")
+        .replace(/[\\/:*?"<>|]/g, "")
+        || "staff";
+    const now = new Date();
+    const timestamp = [
+        now.getFullYear(),
+        padTwoDigits(now.getMonth() + 1),
+        padTwoDigits(now.getDate()),
+        padTwoDigits(now.getHours()),
+        padTwoDigits(now.getMinutes()),
+    ].join("");
+    return `logstaff_${staffName}_${timestamp}.txt`;
+};
+
+const downloadCurrentStaffLog = () => {
+    const content = buildStaffLogText();
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = buildStaffLogFileName();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+const closeStaffLogModal = () => {
+    staffLogModal.classList.add("is-hidden");
+    staffLogModal.setAttribute("aria-hidden", "true");
+};
+
+document.querySelectorAll(".staff-log-button").forEach((button) => {
+    button.addEventListener("click", () => openStaffLogModal(button));
+});
+
+downloadStaffLog.addEventListener("click", downloadCurrentStaffLog);
+closeStaffLog.addEventListener("click", closeStaffLogModal);
+staffLogModal.addEventListener("click", (event) => {
+    if (event.target === staffLogModal) {
+        closeStaffLogModal();
+    }
+});
+
+const refreshStaffStatus = async () => {
+    try {
+        const response = await fetch(staffStatusUrl, { headers: { "Accept": "application/json" } });
+        if (!response.ok) {
+            return;
+        }
+        const payload = await response.json();
+        payload.staff.forEach((staffState) => setStaffRowState(staffState.id, staffState));
+    } catch (error) {
+        return;
+    }
+};
+
+window.addEventListener("focus", refreshStaffStatus);
+setInterval(refreshStaffStatus, 10000);
+</script>
+{% endblock %}

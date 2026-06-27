@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="app">
+    <div class="sidebar" id="appSidebar">
+        <h2>Staff</h2>
+        <a href="/staff/data" class="{% if request.path == '/staff/data' %}active{% endif %}">Data</a>
+        <a href="/staff/logout" class="logout">Logout</a>
+    </div>
+
+    <div class="main">
+        <div class="topbar">
+            <button
+                type="button"
+                class="sidebar-toggle"
+                aria-controls="appSidebar"
+                aria-expanded="true"
+                aria-label="Sembunyikan sidebar"
+                title="Sembunyikan sidebar"
+            ></button>
+            <span>Staff: {{ user }}</span>
+        </div>
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='password_toggle.js') }}"></script>
+<script src="{{ url_for('static', filename='sidebar_toggle.js') }}"></script>
+</body>
+</html>

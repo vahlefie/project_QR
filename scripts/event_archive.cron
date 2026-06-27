@@ -1,0 +1,5 @@
+# Backup final data tamu client yang melewati periode akhir.
+# Pasang dengan: crontab scripts/event_archive.cron
+# Sesuaikan /path/to/project_qr dengan path deploy server.
+
+5 0 * * * cd /path/to/project_qr && .venv/bin/python scripts/backup_expired_events.py >> logs/event_archive_cron.log 2>&1

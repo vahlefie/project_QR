@@ -1,0 +1,99 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Tambah Admin</h3>
+
+    {% if error %}
+        <p class="danger-text">{{ error }}</p>
+    {% endif %}
+
+    <form method="POST" class="user-form">
+        <div class="form-grid">
+            <label>
+                <span>Username*</span>
+                <input
+                    type="text"
+                    name="username"
+                    maxlength="15"
+                    pattern="[A-Za-z0-9_]{3,15}"
+                    title="Username 3-15 karakter, hanya huruf, angka, atau underscore"
+                    value="{{ form_data.get('username', '') }}"
+                    required
+                >
+            </label>
+
+            <label>
+                <span>Password*</span>
+                <div class="password-field">
+                    <input
+                        type="password"
+                        name="password"
+                        minlength="8"
+                        pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}"
+                        title="Password minimal 8 karakter dan harus kombinasi huruf besar, huruf kecil, angka, dan karakter spesial"
+                        required
+                    >
+                    <button
+                        type="button"
+                        class="password-toggle-button"
+                        aria-label="Tampilkan password"
+                        title="Tampilkan password"
+                    ></button>
+                </div>
+            </label>
+
+            <label>
+                <span>No HP*</span>
+                <div class="phone-input">
+                    <span>+62</span>
+                    <input
+                        id="phoneLocalInput"
+                        type="text"
+                        inputmode="numeric"
+                        minlength="8"
+                        pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                        title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                        value="{% if form_data.get('no_hp', '').startswith('62') %}{{ form_data.get('no_hp', '')[2:] }}{% else %}{{ form_data.get('no_hp', '') }}{% endif %}"
+                        required
+                    >
+                    <input id="phoneFullInput" type="hidden" name="no_hp">
+                </div>
+            </label>
+
+            <label>
+                <span>Email*</span>
+                <input
+                    type="text"
+                    name="email"
+                    maxlength="30"
+                    value="{{ form_data.get('email', '') }}"
+                    required
+                >
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <a class="secondary-link" href="/super-admin/admins">Batal</a>
+            <button type="submit">Tambah Admin</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const userForm = document.querySelector(".user-form");
+    const phoneLocalInput = document.getElementById("phoneLocalInput");
+    const phoneFullInput = document.getElementById("phoneFullInput");
+
+    userForm.addEventListener("submit", () => {
+        let localNumber = phoneLocalInput.value.trim();
+        if (localNumber.startsWith("62")) {
+            localNumber = localNumber.slice(2);
+        }
+        if (localNumber.startsWith("0")) {
+            localNumber = localNumber.slice(1);
+        }
+        phoneFullInput.value = `62${localNumber}`;
+    });
+</script>
+{% endblock %}

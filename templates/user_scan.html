@@ -1,0 +1,224 @@
+{% extends "user_layout.html" %}
+
+{% block content %}
+<div class="card scan-card" data-scan-page data-verify-url="{{ verify_url }}" data-available="{{ 'true' if is_available else 'false' }}">
+    <h3>Scan</h3>
+
+    {% if not is_available %}
+        <p class="danger-text">{{ error_message }}</p>
+    {% else %}
+        <div class="scan-mode-tabs" role="tablist" aria-label="Mode Scan">
+            <button type="button" class="secondary-button scan-mode-button is-active" data-scan-mode="camera">Kamera</button>
+            <button type="button" class="secondary-button scan-mode-button" data-scan-mode="scanner">Scanner</button>
+        </div>
+
+        <section class="scan-panel" data-scan-panel="camera">
+            <div class="scan-camera-frame">
+                <video id="scanVideo" playsinline muted></video>
+            </div>
+            <p class="scan-status" id="cameraStatus">Kamera belum aktif.</p>
+            <div class="detail-actions scan-actions">
+                <button type="button" id="startCameraScan">Mulai</button>
+                <button type="button" class="secondary-button" id="stopCameraScan" disabled>Stop</button>
+            </div>
+        </section>
+
+        <section class="scan-panel is-hidden" data-scan-panel="scanner">
+            <form id="scannerForm" class="scan-form">
+                <label>
+                    <span>Token QR</span>
+                    <input
+                        id="scannerTokenInput"
+                        type="text"
+                        name="token"
+                        autocomplete="off"
+                        inputmode="text"
+                        required
+                    >
+                </label>
+            </form>
+        </section>
+
+        <div class="scan-result is-hidden" id="scanResult" role="status" aria-live="polite">
+            <p class="scan-result-message" id="scanResultMessage"></p>
+            <p class="scan-result-code is-hidden" id="scanResultCode"></p>
+        </div>
+    {% endif %}
+</div>
+
+{% if is_available %}
+<script>
+const scanPage = document.querySelector("[data-scan-page]");
+
+if (scanPage) {
+    const verifyUrl = scanPage.dataset.verifyUrl;
+    const modeButtons = Array.from(document.querySelectorAll("[data-scan-mode]"));
+    const panels = Array.from(document.querySelectorAll("[data-scan-panel]"));
+    const scanVideo = document.getElementById("scanVideo");
+    const startCameraScan = document.getElementById("startCameraScan");
+    const stopCameraScan = document.getElementById("stopCameraScan");
+    const cameraStatus = document.getElementById("cameraStatus");
+    const scannerForm = document.getElementById("scannerForm");
+    const scannerTokenInput = document.getElementById("scannerTokenInput");
+    const scanResult = document.getElementById("scanResult");
+    const scanResultMessage = document.getElementById("scanResultMessage");
+    const scanResultCode = document.getElementById("scanResultCode");
+
+    let cameraStream = null;
+    let detector = null;
+    let isCameraScanning = false;
+    let isSubmittingScan = false;
+    let scannerInputTimer = null;
+
+    const buildClientRequestId = () => {
+        const gmt7Time = new Date(Date.now() + (7 * 60 * 60 * 1000));
+        const timestamp = gmt7Time.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+        const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+        return `QR-${timestamp}-${suffix}`;
+    };
+
+    const setActiveMode = (mode) => {
+        modeButtons.forEach((button) => {
+            button.classList.toggle("is-active", button.dataset.scanMode === mode);
+        });
+        panels.forEach((panel) => {
+            panel.classList.toggle("is-hidden", panel.dataset.scanPanel !== mode);
+        });
+        if (mode === "scanner") {
+            stopCamera();
+            window.setTimeout(() => scannerTokenInput.focus(), 80);
+        }
+    };
+
+    const showResult = (message, requestId = "") => {
+        scanResultMessage.textContent = message;
+        scanResultCode.textContent = requestId ? `Request ID: ${requestId}` : "";
+        scanResultCode.classList.toggle("is-hidden", !requestId);
+        scanResult.classList.remove("is-hidden");
+    };
+
+    const submitQrToken = async (token) => {
+        const cleanToken = String(token || "").trim();
+        if (!cleanToken || isSubmittingScan) {
+            return;
+        }
+
+        const clientRequestId = buildClientRequestId();
+        isSubmittingScan = true;
+        showResult("Memeriksa QR...");
+
+        try {
+            const response = await fetch(verifyUrl, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "X-Client-Request-ID": clientRequestId,
+                },
+                body: JSON.stringify({ token: cleanToken }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            showResult(payload.message || "Data selesai diperiksa.", payload.request_id || "");
+        } catch (error) {
+            showResult("Gagal Terhubung ke Server.");
+        } finally {
+            scannerTokenInput.value = "";
+            window.setTimeout(() => {
+                isSubmittingScan = false;
+                if (!scannerTokenInput.closest(".scan-panel").classList.contains("is-hidden")) {
+                    scannerTokenInput.focus();
+                }
+            }, 800);
+        }
+    };
+
+    const stopCamera = () => {
+        isCameraScanning = false;
+        if (cameraStream) {
+            cameraStream.getTracks().forEach((track) => track.stop());
+            cameraStream = null;
+        }
+        scanVideo.srcObject = null;
+        startCameraScan.disabled = false;
+        stopCameraScan.disabled = true;
+        cameraStatus.textContent = "Kamera belum aktif.";
+    };
+
+    const scanCameraFrame = async () => {
+        if (!isCameraScanning || !detector) {
+            return;
+        }
+
+        try {
+            const codes = await detector.detect(scanVideo);
+            if (codes.length > 0) {
+                const rawValue = codes[0].rawValue;
+                stopCamera();
+                submitQrToken(rawValue);
+                return;
+            }
+            cameraStatus.textContent = "Mencari QR...";
+        } catch (error) {
+            cameraStatus.textContent = "Kamera aktif.";
+        }
+
+        if (isCameraScanning) {
+            window.requestAnimationFrame(scanCameraFrame);
+        }
+    };
+
+    const startCamera = async () => {
+        if (!("BarcodeDetector" in window)) {
+            cameraStatus.textContent = "Browser tidak mendukung scan kamera.";
+            return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            cameraStatus.textContent = "Kamera tidak tersedia.";
+            return;
+        }
+
+        try {
+            detector = detector || new BarcodeDetector({ formats: ["qr_code"] });
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: "environment" } },
+                audio: false,
+            });
+            scanVideo.srcObject = cameraStream;
+            await scanVideo.play();
+            isCameraScanning = true;
+            startCameraScan.disabled = true;
+            stopCameraScan.disabled = false;
+            cameraStatus.textContent = "Mencari QR...";
+            window.requestAnimationFrame(scanCameraFrame);
+        } catch (error) {
+            stopCamera();
+            cameraStatus.textContent = "Kamera gagal dibuka.";
+        }
+    };
+
+    modeButtons.forEach((button) => {
+        button.addEventListener("click", () => setActiveMode(button.dataset.scanMode));
+    });
+
+    startCameraScan.addEventListener("click", startCamera);
+    stopCameraScan.addEventListener("click", stopCamera);
+    scannerForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        window.clearTimeout(scannerInputTimer);
+        submitQrToken(scannerTokenInput.value);
+    });
+    scannerTokenInput.addEventListener("input", () => {
+        window.clearTimeout(scannerInputTimer);
+        if (!scannerTokenInput.value.trim()) {
+            return;
+        }
+        scannerInputTimer = window.setTimeout(() => {
+            submitQrToken(scannerTokenInput.value);
+        }, 350);
+    });
+
+    window.addEventListener("beforeunload", stopCamera);
+}
+</script>
+{% endif %}
+{% endblock %}

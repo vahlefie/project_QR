@@ -1,0 +1,720 @@
+{% extends "user_layout.html" %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <div class="card">
+        <h3>Client Dashboard</h3>
+        <p>Data personal kamu tersedia dalam tampilan yang ringkas dan mudah dipindai.</p>
+    </div>
+
+    <div class="card">
+        <h3>Data Tamu</h3>
+        <p>Buka menu Data untuk upload Excel dan mengelola daftar tamu milik kamu.</p>
+        <a class="button-link" href="/user/data">Buka Data</a>
+    </div>
+
+    <div class="card">
+        <h3>Staff</h3>
+        {% if is_client_active %}
+            <p>Tambahkan staff untuk membantu mengelola dan memverifikasi data tamu milik kamu.</p>
+            <a class="button-link" href="/user/staff">Buka Staff</a>
+        {% else %}
+            <p>N/A</p>
+            <button type="button" class="secondary-button" disabled>Buka Staff</button>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Verifikasi Kehadiran</h3>
+        {% if not is_client_active %}
+            <p>N/A</p>
+        {% elif attendance_url %}
+            <p>Link publik untuk mencatat kehadiran tamu berdasarkan nomor HP.</p>
+            <div class="attendance-link-row">
+                <input type="text" value="{{ attendance_url }}" readonly>
+                <a class="button-link" href="{{ attendance_url }}" target="_blank" rel="noopener">Buka</a>
+            </div>
+        {% else %}
+            <p>URL publik belum dibuat oleh admin.</p>
+        {% endif %}
+    </div>
+
+    {% if is_client_active %}
+    {% set guest_chart = guest_chart_modes.live %}
+    {% set guest_segment = guest_chart.attendance_segments[0] %}
+    {% set guest_time_series = guest_chart.attendance_time_series %}
+    {% set guest_verification = guest_chart.staff_verification_chart %}
+    <div class="card dashboard-chart-card" data-guest-chart data-initial-mode="live">
+        <div class="dashboard-chart-heading">
+            <div>
+                <h3>Visualisasi Tamu</h3>
+                <p id="guestChartSource">{{ guest_chart.source_label }}: {{ guest_chart.source_note }}</p>
+            </div>
+            <div class="dashboard-chart-actions" role="group" aria-label="Mode data chart">
+                <button
+                    type="button"
+                    class="secondary-button dashboard-chart-mode-button is-active"
+                    data-guest-chart-mode="live"
+                    aria-pressed="true"
+                >Live</button>
+                <button
+                    type="button"
+                    class="secondary-button dashboard-chart-mode-button"
+                    data-guest-chart-mode="demo"
+                    aria-pressed="false"
+                >Demo</button>
+            </div>
+        </div>
+
+        <div class="dashboard-live-controls" data-live-controls>
+            <label>
+                <span>Rentang</span>
+                <select id="attendanceRangeMode">
+                    <option value="last_30m" selected>Last 30m</option>
+                    <option value="last_1h">Last 1h</option>
+                    <option value="last_3h">Last 3h</option>
+                    <option value="last_6h">Last 6h</option>
+                    <option value="last_12h">Last 12h</option>
+                    <option value="custom">User defined</option>
+                </select>
+            </label>
+            <label>
+                <span>Mulai</span>
+                <input type="datetime-local" id="attendanceRangeStart" step="60" disabled>
+            </label>
+            <label>
+                <span>Akhir</span>
+                <input type="datetime-local" id="attendanceRangeEnd" step="60" disabled>
+            </label>
+            <button type="button" class="secondary-button" id="applyChartRange">Terapkan</button>
+        </div>
+
+        <div class="guest-chart-content">
+            <div class="guest-donut" id="guestDonut" style="--attendance-percent: {{ guest_chart.attended_percent }};">
+                <svg viewBox="0 0 120 120" role="img" aria-label="Chart kehadiran tamu">
+                    <circle class="guest-donut-track" cx="60" cy="60" r="48" pathLength="100"></circle>
+                    <circle class="guest-donut-value" cx="60" cy="60" r="48" pathLength="100"></circle>
+                </svg>
+                <div class="guest-donut-label">
+                    <strong id="guestAttendancePercent">{{ guest_chart.attended_percent }}%</strong>
+                    <span>Hadir</span>
+                </div>
+            </div>
+
+            <div class="guest-chart-main">
+                <div class="guest-chart-total">
+                    <span>Total tamu</span>
+                    <strong id="guestChartTotal">{{ guest_chart.total_guests }}</strong>
+                </div>
+
+                <div class="guest-chart-stats">
+                    <div>
+                        <span>Sudah hadir</span>
+                        <strong id="guestChartAttended">{{ guest_chart.attended_count }}</strong>
+                    </div>
+                    <div>
+                        <span>Belum hadir</span>
+                        <strong id="guestChartPending">{{ guest_chart.pending_count }}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="guest-segment-panel" aria-label="Persentase hadir berdasarkan status tamu">
+                <div class="guest-segment-tabs" role="group" aria-label="Kategori tamu">
+                    {% for segment in guest_chart.attendance_segments %}
+                        <button
+                            type="button"
+                            class="secondary-button guest-segment-button {% if loop.first %}is-active{% endif %}"
+                            data-guest-segment="{{ segment.key }}"
+                            aria-pressed="{{ 'true' if loop.first else 'false' }}"
+                        >{{ segment.label }}</button>
+                    {% endfor %}
+                </div>
+
+                <div class="guest-segment-summary">
+                    <span id="guestSegmentTitle">{{ guest_segment.label }}</span>
+                    <strong id="guestSegmentTotal">{{ guest_segment.total_count }}</strong>
+                </div>
+
+                <div class="guest-segment-bars">
+                    <div class="guest-segment-row">
+                        <div class="guest-segment-label">
+                            <span>Hadir</span>
+                            <strong id="guestSegmentAttendedCount">{{ guest_segment.attended_count }}</strong>
+                        </div>
+                        <div class="guest-segment-track">
+                            <span id="guestSegmentAttendedBar" style="width: {{ guest_segment.attended_percent }}%;"></span>
+                        </div>
+                        <small id="guestSegmentAttendedPercent">{{ guest_segment.attended_percent }}%</small>
+                    </div>
+                    <div class="guest-segment-row">
+                        <div class="guest-segment-label">
+                            <span>Tidak hadir</span>
+                            <strong id="guestSegmentPendingCount">{{ guest_segment.pending_count }}</strong>
+                        </div>
+                        <div class="guest-segment-track">
+                            <span
+                                id="guestSegmentPendingBar"
+                                class="is-muted"
+                                style="width: {{ guest_segment.pending_percent }}%;"
+                            ></span>
+                        </div>
+                        <small id="guestSegmentPendingPercent">{{ guest_segment.pending_percent }}%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-analytics-grid">
+            <section class="dashboard-chart-section" aria-label="Jumlah kehadiran tamu per 30 menit">
+                <div class="dashboard-chart-section-heading">
+                    <div>
+                        <h4>Kehadiran per 30 menit</h4>
+                        <p id="attendanceRangeLabel">{{ guest_time_series.range_label }}</p>
+                    </div>
+                    <div class="dashboard-chart-section-stat">
+                        <span>Total</span>
+                        <strong id="attendanceTimeTotal">{{ guest_time_series.total_count }}</strong>
+                    </div>
+                </div>
+
+                <div class="attendance-chart-scroll" id="attendanceChartScroll">
+                    <div class="attendance-chart-canvas" id="attendanceChartCanvas">
+                        <div class="attendance-area-chart">
+                            <svg
+                                id="attendanceAreaChart"
+                                viewBox="0 0 100 100"
+                                preserveAspectRatio="none"
+                                role="img"
+                                aria-label="Area chart jumlah kehadiran tamu per 30 menit"
+                            >
+                                <g id="attendanceAreaGrid"></g>
+                                <path id="attendanceAreaFill" class="attendance-area-fill"></path>
+                                <path id="attendanceAreaLine" class="attendance-area-line"></path>
+                                <g id="attendanceAreaPoints"></g>
+                            </svg>
+                        </div>
+                        <div class="attendance-time-axis" id="attendanceTimeAxis">
+                            {% for item in guest_time_series.bins %}
+                                <span>
+                                    <strong>{{ item.label }}</strong>
+                                    <small>{{ item.count }}</small>
+                                </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <p class="dashboard-chart-caption">
+                    Puncak slot: <strong id="attendanceTimePeak">{{ guest_time_series.max_count }}</strong> tamu
+                </p>
+            </section>
+
+            <section class="dashboard-chart-section" aria-label="Jumlah verifikasi pada masing-masing staff">
+                <div class="dashboard-chart-section-heading">
+                    <div>
+                        <h4>Verifikasi Staff</h4>
+                        <p>Jumlah verifikasi per staff</p>
+                    </div>
+                    <div class="dashboard-chart-section-stat">
+                        <span>Total</span>
+                        <strong id="staffVerificationTotal">{{ guest_verification.total_count }}</strong>
+                    </div>
+                </div>
+
+                <div class="staff-pie-layout">
+                    <div class="staff-pie" id="staffVerificationPie" role="img" aria-label="Pie chart verifikasi staff">
+                        <span id="staffVerificationCenter">{{ guest_verification.total_count }}</span>
+                        <small>verifikasi</small>
+                    </div>
+                    <div class="staff-pie-legend" id="staffVerificationLegend">
+                        {% for item in guest_verification.slices %}
+                            <div class="staff-pie-legend-row">
+                                <span class="staff-pie-swatch"></span>
+                                <strong>{{ item.label }}</strong>
+                                <small>{{ item.count }} ({{ item.percent }}%)</small>
+                            </div>
+                        {% else %}
+                            <p>Belum ada verifikasi staff.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% if is_client_active %}
+<script>
+const guestChartPayload = {{ guest_chart_modes|tojson }};
+const liveChartDataUrl = "{{ url_for('dashboard.user_dashboard_chart_data') }}";
+const guestChartRoot = document.querySelector("[data-guest-chart]");
+
+if (guestChartRoot && guestChartPayload) {
+    const chartModeStorageKey = "userDashboardGuestChartMode";
+    const numberFormatter = new Intl.NumberFormat("id-ID");
+    const modeButtons = Array.from(document.querySelectorAll("[data-guest-chart-mode]"));
+    const segmentButtons = Array.from(document.querySelectorAll("[data-guest-segment]"));
+    const guestDonut = document.getElementById("guestDonut");
+    const sourceText = document.getElementById("guestChartSource");
+    const percentText = document.getElementById("guestAttendancePercent");
+    const totalText = document.getElementById("guestChartTotal");
+    const attendedText = document.getElementById("guestChartAttended");
+    const pendingText = document.getElementById("guestChartPending");
+    const segmentTitle = document.getElementById("guestSegmentTitle");
+    const segmentTotal = document.getElementById("guestSegmentTotal");
+    const segmentAttendedCount = document.getElementById("guestSegmentAttendedCount");
+    const segmentPendingCount = document.getElementById("guestSegmentPendingCount");
+    const segmentAttendedBar = document.getElementById("guestSegmentAttendedBar");
+    const segmentPendingBar = document.getElementById("guestSegmentPendingBar");
+    const segmentAttendedPercent = document.getElementById("guestSegmentAttendedPercent");
+    const segmentPendingPercent = document.getElementById("guestSegmentPendingPercent");
+    const attendanceChartScroll = document.getElementById("attendanceChartScroll");
+    const attendanceChartCanvas = document.getElementById("attendanceChartCanvas");
+    const attendanceAreaChart = document.getElementById("attendanceAreaChart");
+    const attendanceAreaGrid = document.getElementById("attendanceAreaGrid");
+    const attendanceAreaFill = document.getElementById("attendanceAreaFill");
+    const attendanceAreaLine = document.getElementById("attendanceAreaLine");
+    const attendanceAreaPoints = document.getElementById("attendanceAreaPoints");
+    const attendanceTimeAxis = document.getElementById("attendanceTimeAxis");
+    const attendanceTimeTotal = document.getElementById("attendanceTimeTotal");
+    const attendanceTimePeak = document.getElementById("attendanceTimePeak");
+    const staffVerificationPie = document.getElementById("staffVerificationPie");
+    const staffVerificationCenter = document.getElementById("staffVerificationCenter");
+    const staffVerificationTotal = document.getElementById("staffVerificationTotal");
+    const staffVerificationLegend = document.getElementById("staffVerificationLegend");
+    const liveControls = document.querySelector("[data-live-controls]");
+    const attendanceRangeMode = document.getElementById("attendanceRangeMode");
+    const attendanceRangeStart = document.getElementById("attendanceRangeStart");
+    const attendanceRangeEnd = document.getElementById("attendanceRangeEnd");
+    const applyChartRange = document.getElementById("applyChartRange");
+    const attendanceRangeLabel = document.getElementById("attendanceRangeLabel");
+    const svgNamespace = "http://www.w3.org/2000/svg";
+    const pieColors = ["#007aff", "#34c759", "#ff9500", "#af52de", "#ff3b30", "#5ac8fa"];
+    const attendanceBinWidth = 24;
+    const attendanceChartMinWidth = 720;
+    const attendanceBaseline = 86;
+    const attendanceTopLine = 10;
+    const chartAutoRefreshMs = 10000;
+    const maxCustomRangeMs = 24 * 60 * 60 * 1000;
+    let chartRefreshTimer = null;
+    let isRefreshingLiveChart = false;
+    let activeChartMode = guestChartRoot.dataset.initialMode || "live";
+    let activeSegment = segmentButtons[0] ? segmentButtons[0].dataset.guestSegment : "";
+
+    const getStoredChartMode = () => {
+        try {
+            return window.localStorage.getItem(chartModeStorageKey);
+        } catch (error) {
+            return "";
+        }
+    };
+
+    const storeChartMode = (mode) => {
+        try {
+            window.localStorage.setItem(chartModeStorageKey, mode);
+        } catch (error) {
+            return;
+        }
+    };
+
+    const padDateValue = (value) => String(value).padStart(2, "0");
+
+    const formatDateTimeLocal = (date) => {
+        const year = date.getFullYear();
+        const month = padDateValue(date.getMonth() + 1);
+        const day = padDateValue(date.getDate());
+        const hour = padDateValue(date.getHours());
+        const minute = padDateValue(date.getMinutes());
+        return `${year}-${month}-${day}T${hour}:${minute}`;
+    };
+
+    const parseRangeInput = (value) => {
+        if (!value) {
+            return null;
+        }
+        const parsedDate = new Date(value);
+        return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+    };
+
+    const getCurrentLocalMinute = () => {
+        const now = new Date();
+        now.setSeconds(0, 0);
+        return now;
+    };
+
+    const updateRangeInputLimits = () => {
+        const now = getCurrentLocalMinute();
+        const nowValue = formatDateTimeLocal(now);
+        const startDate = parseRangeInput(attendanceRangeStart.value);
+        const endDate = parseRangeInput(attendanceRangeEnd.value);
+
+        attendanceRangeStart.max = nowValue;
+        attendanceRangeEnd.max = nowValue;
+        attendanceRangeStart.min = "";
+        attendanceRangeEnd.min = "";
+
+        if (endDate) {
+            attendanceRangeStart.min = formatDateTimeLocal(new Date(endDate.getTime() - maxCustomRangeMs));
+            attendanceRangeStart.max = formatDateTimeLocal(new Date(Math.min(endDate.getTime(), now.getTime())));
+        }
+        if (startDate) {
+            attendanceRangeEnd.min = formatDateTimeLocal(startDate);
+            attendanceRangeEnd.max = formatDateTimeLocal(
+                new Date(Math.min(startDate.getTime() + maxCustomRangeMs, now.getTime()))
+            );
+        }
+    };
+
+    const normalizeCustomRangeInputs = () => {
+        const now = getCurrentLocalMinute();
+        let endDate = parseRangeInput(attendanceRangeEnd.value) || now;
+        let startDate = parseRangeInput(attendanceRangeStart.value) || new Date(endDate.getTime() - (30 * 60 * 1000));
+
+        if (endDate > now) {
+            endDate = now;
+        }
+        if (startDate > now) {
+            startDate = now;
+        }
+        if (startDate >= endDate) {
+            startDate = new Date(endDate.getTime() - (30 * 60 * 1000));
+        }
+        if (endDate.getTime() - startDate.getTime() > maxCustomRangeMs) {
+            startDate = new Date(endDate.getTime() - maxCustomRangeMs);
+        }
+
+        attendanceRangeStart.value = formatDateTimeLocal(startDate);
+        attendanceRangeEnd.value = formatDateTimeLocal(endDate);
+        updateRangeInputLimits();
+    };
+
+    const updateRangeInputState = () => {
+        const isLiveMode = activeChartMode === "live";
+        const isCustomRange = attendanceRangeMode.value === "custom";
+        attendanceRangeMode.disabled = !isLiveMode;
+        attendanceRangeStart.disabled = !isLiveMode || !isCustomRange;
+        attendanceRangeEnd.disabled = !isLiveMode || !isCustomRange;
+        applyChartRange.disabled = !isLiveMode;
+
+        if (isLiveMode && isCustomRange) {
+            normalizeCustomRangeInputs();
+        } else {
+            updateRangeInputLimits();
+        }
+    };
+
+    const scheduleChartRefresh = () => {
+        if (chartRefreshTimer) {
+            window.clearInterval(chartRefreshTimer);
+            chartRefreshTimer = null;
+        }
+
+        if (activeChartMode !== "live") {
+            return;
+        }
+        chartRefreshTimer = window.setInterval(() => refreshLiveChart(), chartAutoRefreshMs);
+    };
+
+    const updateLiveControlState = () => {
+        const isLiveMode = activeChartMode === "live";
+        liveControls.classList.toggle("is-disabled", !isLiveMode);
+        updateRangeInputState();
+        scheduleChartRefresh();
+    };
+
+    const buildLiveChartUrl = () => {
+        const chartUrl = new URL(liveChartDataUrl, window.location.origin);
+        chartUrl.searchParams.set("range_mode", attendanceRangeMode.value);
+        if (attendanceRangeMode.value === "custom") {
+            normalizeCustomRangeInputs();
+            if (attendanceRangeStart.value) {
+                chartUrl.searchParams.set("start_at", attendanceRangeStart.value);
+            }
+            if (attendanceRangeEnd.value) {
+                chartUrl.searchParams.set("end_at", attendanceRangeEnd.value);
+            }
+        }
+        return chartUrl;
+    };
+
+    const getActiveSegment = (chart) => {
+        const segments = chart.attendance_segments || [];
+        return segments.find((segment) => segment.key === activeSegment) || segments[0];
+    };
+
+    const renderSegment = (chart) => {
+        const segment = getActiveSegment(chart);
+        if (!segment) {
+            return;
+        }
+
+        activeSegment = segment.key;
+        segmentTitle.textContent = segment.label;
+        segmentTotal.textContent = numberFormatter.format(segment.total_count || 0);
+        segmentAttendedCount.textContent = numberFormatter.format(segment.attended_count || 0);
+        segmentPendingCount.textContent = numberFormatter.format(segment.pending_count || 0);
+        segmentAttendedBar.style.width = `${segment.attended_percent || 0}%`;
+        segmentPendingBar.style.width = `${segment.pending_percent || 0}%`;
+        segmentAttendedPercent.textContent = `${segment.attended_percent || 0}%`;
+        segmentPendingPercent.textContent = `${segment.pending_percent || 0}%`;
+
+        segmentButtons.forEach((button) => {
+            const isActive = button.dataset.guestSegment === activeSegment;
+            button.classList.toggle("is-active", isActive);
+            button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+    };
+
+    const renderAttendanceTimeSeries = (series) => {
+        const bins = series.bins || [];
+        const maxCount = series.max_count || 0;
+        const chartWidth = Math.max(attendanceChartMinWidth, Math.max(bins.length - 1, 1) * attendanceBinWidth);
+        const chartHeight = attendanceBaseline - attendanceTopLine;
+        const points = bins.map((item, index) => {
+            const x = bins.length > 1 ? (index / (bins.length - 1)) * chartWidth : chartWidth / 2;
+            const valueRatio = maxCount ? (item.count || 0) / maxCount : 0;
+            const y = attendanceBaseline - (valueRatio * chartHeight);
+            return { ...item, x, y };
+        });
+
+        attendanceChartCanvas.style.width = `${chartWidth}px`;
+        attendanceAreaChart.setAttribute("viewBox", `0 0 ${chartWidth} 100`);
+
+        if (!points.length) {
+            attendanceAreaFill.setAttribute("d", "");
+            attendanceAreaLine.setAttribute("d", "");
+            attendanceAreaGrid.replaceChildren();
+            attendanceAreaPoints.replaceChildren();
+            attendanceTimeAxis.replaceChildren();
+            attendanceTimeAxis.style.gridTemplateColumns = "";
+            attendanceTimeTotal.textContent = "0";
+            attendanceTimePeak.textContent = "0";
+            attendanceRangeLabel.textContent = series.range_label || "Belum ada waktu kehadiran tercatat";
+            return;
+        }
+
+        const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+        const fillPath = `${linePath} L ${points[points.length - 1].x} ${attendanceBaseline} L ${points[0].x} ${attendanceBaseline} Z`;
+        attendanceAreaLine.setAttribute("d", linePath);
+        attendanceAreaFill.setAttribute("d", fillPath);
+
+        attendanceAreaGrid.replaceChildren();
+        let previousGridDateLabel = "";
+        points.forEach((point, index) => {
+            const startDate = bins[index].start ? new Date(bins[index].start) : null;
+            const gridDateLabel = startDate && !Number.isNaN(startDate.getTime())
+                ? startDate.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit" })
+                : "";
+            const isDateBoundary = Boolean(gridDateLabel && gridDateLabel !== previousGridDateLabel);
+            if (gridDateLabel) {
+                previousGridDateLabel = gridDateLabel;
+            }
+            const gridLine = document.createElementNS(svgNamespace, "line");
+            gridLine.setAttribute("x1", point.x);
+            gridLine.setAttribute("x2", point.x);
+            gridLine.setAttribute("y1", attendanceTopLine);
+            gridLine.setAttribute("y2", attendanceBaseline);
+            gridLine.setAttribute("class", index === 0 || isDateBoundary ? "is-major" : "");
+            attendanceAreaGrid.append(gridLine);
+        });
+        for (let gridIndex = 0; gridIndex <= 4; gridIndex += 1) {
+            const y = attendanceTopLine + ((attendanceBaseline - attendanceTopLine) / 4) * gridIndex;
+            const gridLine = document.createElementNS(svgNamespace, "line");
+            gridLine.setAttribute("x1", 0);
+            gridLine.setAttribute("x2", chartWidth);
+            gridLine.setAttribute("y1", y);
+            gridLine.setAttribute("y2", y);
+            gridLine.setAttribute("class", "is-horizontal");
+            attendanceAreaGrid.append(gridLine);
+        }
+
+        attendanceAreaPoints.replaceChildren();
+        points.forEach((point) => {
+            const circle = document.createElementNS(svgNamespace, "circle");
+            circle.setAttribute("cx", point.x);
+            circle.setAttribute("cy", point.y);
+            circle.setAttribute("r", bins.length > 80 ? 1.1 : 2);
+            const title = document.createElementNS(svgNamespace, "title");
+            title.textContent = `${point.range_label}: ${point.count || 0} tamu`;
+            circle.append(title);
+            attendanceAreaPoints.append(circle);
+        });
+
+        attendanceTimeAxis.replaceChildren();
+        attendanceTimeAxis.style.gridTemplateColumns = `repeat(${bins.length}, minmax(${attendanceBinWidth}px, 1fr))`;
+        const labelStep = bins.length > 96 ? 4 : bins.length > 48 ? 2 : 1;
+        let previousDateLabel = "";
+        bins.forEach((item, index) => {
+            const label = document.createElement("span");
+            const startDate = item.start ? new Date(item.start) : null;
+            const dateLabel = startDate && !Number.isNaN(startDate.getTime())
+                ? startDate.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit" })
+                : "";
+            const isDateBoundary = Boolean(dateLabel && dateLabel !== previousDateLabel);
+            const shouldShowTime = index % labelStep === 0 || index === bins.length - 1 || isDateBoundary;
+            const time = document.createElement("strong");
+            const count = document.createElement("small");
+            if (isDateBoundary) {
+                label.classList.add("is-major");
+                previousDateLabel = dateLabel;
+            }
+            if (shouldShowTime) {
+                time.textContent = isDateBoundary ? dateLabel : item.label;
+                count.textContent = isDateBoundary ? item.label : numberFormatter.format(item.count || 0);
+            } else {
+                label.classList.add("is-muted");
+                time.textContent = "";
+                count.textContent = "";
+            }
+            label.append(time, count);
+            attendanceTimeAxis.append(label);
+        });
+
+        attendanceTimeTotal.textContent = numberFormatter.format(series.total_count || 0);
+        attendanceTimePeak.textContent = numberFormatter.format(maxCount);
+        attendanceRangeLabel.textContent = series.range_label || "Rentang waktu";
+        if (attendanceRangeMode.value === "custom") {
+            attendanceChartScroll.scrollLeft = 0;
+        }
+    };
+
+    const renderStaffVerificationChart = (chart) => {
+        const slices = chart.slices || [];
+        const total = chart.total_count || 0;
+        staffVerificationTotal.textContent = numberFormatter.format(total);
+        staffVerificationCenter.textContent = numberFormatter.format(total);
+
+        if (!total || !slices.length) {
+            staffVerificationPie.style.background = "rgba(60, 60, 67, 0.12)";
+            staffVerificationLegend.replaceChildren();
+            const emptyText = document.createElement("p");
+            emptyText.textContent = "Belum ada verifikasi staff.";
+            staffVerificationLegend.append(emptyText);
+            return;
+        }
+
+        let currentPercent = 0;
+        const gradientParts = slices.map((slice, index) => {
+            const color = pieColors[index % pieColors.length];
+            const slicePercent = (slice.count / total) * 100;
+            const startPercent = currentPercent;
+            currentPercent += slicePercent;
+            return `${color} ${startPercent}% ${currentPercent}%`;
+        });
+        staffVerificationPie.style.background = `conic-gradient(${gradientParts.join(", ")})`;
+
+        staffVerificationLegend.replaceChildren();
+        slices.forEach((slice, index) => {
+            const row = document.createElement("div");
+            row.className = "staff-pie-legend-row";
+
+            const swatch = document.createElement("span");
+            swatch.className = "staff-pie-swatch";
+            swatch.style.background = pieColors[index % pieColors.length];
+
+            const label = document.createElement("strong");
+            label.textContent = slice.label;
+            const value = document.createElement("small");
+            value.textContent = `${numberFormatter.format(slice.count || 0)} (${slice.percent || 0}%)`;
+
+            row.append(swatch, label, value);
+            staffVerificationLegend.append(row);
+        });
+    };
+
+    const setGuestChartMode = (mode) => {
+        const nextMode = guestChartPayload[mode] ? mode : "live";
+        const chart = guestChartPayload[nextMode];
+        if (!chart) {
+            return;
+        }
+
+        guestDonut.style.setProperty("--attendance-percent", chart.attended_percent || 0);
+        sourceText.textContent = chart.source_note ? `${chart.source_label}: ${chart.source_note}` : chart.source_label;
+        percentText.textContent = `${chart.attended_percent || 0}%`;
+        totalText.textContent = numberFormatter.format(chart.total_guests || 0);
+        attendedText.textContent = numberFormatter.format(chart.attended_count || 0);
+        pendingText.textContent = numberFormatter.format(chart.pending_count || 0);
+        activeChartMode = nextMode;
+        storeChartMode(nextMode);
+        renderSegment(chart);
+        renderAttendanceTimeSeries(chart.attendance_time_series || {});
+        renderStaffVerificationChart(chart.staff_verification_chart || {});
+        updateLiveControlState();
+
+        modeButtons.forEach((button) => {
+            const isActive = button.dataset.guestChartMode === nextMode;
+            button.classList.toggle("is-active", isActive);
+            button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+    };
+
+    const refreshLiveChart = async () => {
+        if (activeChartMode !== "live" || isRefreshingLiveChart) {
+            return;
+        }
+
+        isRefreshingLiveChart = true;
+        try {
+            const response = await fetch(buildLiveChartUrl(), {
+                headers: { "Accept": "application/json" },
+                credentials: "same-origin",
+            });
+            const payload = await response.json();
+            if (response.ok && payload.status === "success" && payload.chart) {
+                guestChartPayload.live = payload.chart;
+                setGuestChartMode("live");
+            }
+        } catch (error) {
+            return;
+        } finally {
+            isRefreshingLiveChart = false;
+        }
+    };
+
+    const setGuestSegment = (segmentKey) => {
+        activeSegment = segmentKey;
+        setGuestChartMode(activeChartMode);
+    };
+
+    modeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            setGuestChartMode(button.dataset.guestChartMode);
+            if (button.dataset.guestChartMode === "live") {
+                refreshLiveChart();
+            }
+        });
+    });
+    segmentButtons.forEach((button) => {
+        button.addEventListener("click", () => setGuestSegment(button.dataset.guestSegment));
+    });
+    attendanceRangeMode.addEventListener("change", () => {
+        updateRangeInputState();
+        if (attendanceRangeMode.value !== "custom") {
+            refreshLiveChart();
+        }
+    });
+    attendanceRangeStart.addEventListener("change", () => normalizeCustomRangeInputs());
+    attendanceRangeEnd.addEventListener("change", () => normalizeCustomRangeInputs());
+    applyChartRange.addEventListener("click", () => {
+        if (attendanceRangeMode.value === "custom") {
+            normalizeCustomRangeInputs();
+        }
+        refreshLiveChart();
+    });
+    window.addEventListener("focus", () => refreshLiveChart());
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+            refreshLiveChart();
+        }
+    });
+    window.addEventListener("beforeunload", () => {
+        if (chartRefreshTimer) {
+            window.clearInterval(chartRefreshTimer);
+        }
+    });
+    setGuestChartMode(getStoredChartMode() || guestChartRoot.dataset.initialMode || "live");
+}
+</script>
+{% endif %}
+{% endblock %}

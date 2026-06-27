@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifikasi Staff</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="center">
+        <div class="card login-card">
+            <h3>Verifikasi Staff</h3>
+
+            {% if staff %}
+                <p>Masukkan PIN untuk masuk sebagai {{ staff.nama }}.</p>
+            {% else %}
+                <p>Masukkan PIN untuk melanjutkan akses staff.</p>
+            {% endif %}
+
+            {% if error %}
+                <p class="danger-text">{{ error }}</p>
+            {% endif %}
+
+            <form method="POST">
+                <label>
+                    <span>PIN</span>
+                    <input
+                        type="text"
+                        name="pin"
+                        inputmode="numeric"
+                        minlength="6"
+                        maxlength="6"
+                        pattern="[0-9]{6}"
+                        autocomplete="one-time-code"
+                        required
+                    >
+                </label>
+                <button type="submit" class="full-button">Masuk</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

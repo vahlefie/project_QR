@@ -1,0 +1,246 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Manage Admin</h3>
+
+    {% if message %}
+        <p class="success-text">{{ message }}</p>
+    {% endif %}
+
+    {% if error %}
+        <p class="danger-text">{{ error }}</p>
+    {% endif %}
+
+    {% if admins %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Username</th>
+                        <th>No HP</th>
+                        <th>Email</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in admins %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ account.username }}</td>
+                        <td>{{ account.no_hp or 'N/A' }}</td>
+                        <td>{{ account.email or 'N/A' }}</td>
+                        <td>
+                            <div class="action-group">
+                                <form
+                                    id="delete-admin-{{ account.id }}"
+                                    action="/super-admin/admins/{{ account.id }}/delete"
+                                    method="POST"
+                                >
+                                    <input type="hidden" name="super_admin_password">
+                                    <button
+                                        type="button"
+                                        class="danger-button admin-action-button"
+                                        data-action="delete"
+                                        data-form-id="delete-admin-{{ account.id }}"
+                                        data-username="{{ account.username }}"
+                                    >
+                                        Hapus
+                                    </button>
+                                </form>
+
+                                <form
+                                    id="reset-admin-{{ account.id }}"
+                                    action="/super-admin/admins/{{ account.id }}/reset"
+                                    method="POST"
+                                >
+                                    <button
+                                        type="button"
+                                        class="secondary-button admin-action-button"
+                                        data-action="reset"
+                                        data-form-id="reset-admin-{{ account.id }}"
+                                        data-username="{{ account.username }}"
+                                    >
+                                        Reset
+                                    </button>
+                                </form>
+
+                                {% set admin_block_endpoint = 'admin.unblock_admin_account' if account.is_blocked else 'admin.block_admin_account' %}
+                                <form
+                                    id="block-admin-{{ account.id }}"
+                                    action="{{ url_for(admin_block_endpoint, admin_id=account.id) }}"
+                                    method="POST"
+                                >
+                                    <input type="hidden" name="account_block_password">
+                                    <button
+                                        type="button"
+                                        class="{% if account.is_blocked %}success-button{% else %}danger-button{% endif %} admin-action-button"
+                                        data-action="{% if account.is_blocked %}unblock{% else %}block{% endif %}"
+                                        data-form-id="block-admin-{{ account.id }}"
+                                        data-username="{{ account.username }}"
+                                    >
+                                        {% if account.is_blocked %}Unblock{% else %}Block{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>Belum ada admin yang terdaftar.</p>
+    {% endif %}
+</div>
+
+<div class="confirm-modal is-hidden" id="adminActionModal" aria-hidden="true">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="adminActionTitle">
+        <h4 id="adminActionTitle"></h4>
+        <p id="adminActionMessage" class="modal-message"></p>
+
+        <div class="password-confirm is-hidden" id="deletePasswordStep">
+            <div class="password-field">
+                <input
+                    type="password"
+                    id="superAdminPasswordInput"
+                    placeholder="Password Super Admin"
+                    autocomplete="current-password"
+                >
+                <button
+                    type="button"
+                    class="password-toggle-button"
+                    aria-label="Tampilkan password"
+                    title="Tampilkan password"
+                ></button>
+            </div>
+            <p class="danger-text is-hidden" id="passwordError">Password Super Admin wajib diisi.</p>
+        </div>
+
+        <div class="confirm-actions" id="warningActions">
+            <button type="button" class="secondary-button reload-page-button">Tidak</button>
+            <button type="button" class="danger-button" id="confirmWarningButton">Ya</button>
+        </div>
+
+        <div class="confirm-actions is-hidden" id="passwordActions">
+            <button type="button" class="secondary-button reload-page-button">Tidak</button>
+            <button type="button" class="danger-button" id="confirmDeleteButton">Proses</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const adminActionModal = document.getElementById("adminActionModal");
+    const adminActionTitle = document.getElementById("adminActionTitle");
+    const adminActionMessage = document.getElementById("adminActionMessage");
+    const deletePasswordStep = document.getElementById("deletePasswordStep");
+    const superAdminPasswordInput = document.getElementById("superAdminPasswordInput");
+    const passwordError = document.getElementById("passwordError");
+    const warningActions = document.getElementById("warningActions");
+    const passwordActions = document.getElementById("passwordActions");
+    const confirmWarningButton = document.getElementById("confirmWarningButton");
+    const confirmDeleteButton = document.getElementById("confirmDeleteButton");
+    let pendingAction = null;
+    let pendingFormId = null;
+
+    function openModal() {
+        adminActionModal.classList.remove("is-hidden");
+        adminActionModal.setAttribute("aria-hidden", "false");
+    }
+
+    function reloadPage() {
+        window.location.reload();
+    }
+
+    function showWarningStep() {
+        deletePasswordStep.classList.add("is-hidden");
+        passwordActions.classList.add("is-hidden");
+        warningActions.classList.remove("is-hidden");
+        passwordError.classList.add("is-hidden");
+        superAdminPasswordInput.value = "";
+    }
+
+    document.querySelectorAll(".admin-action-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            pendingAction = button.dataset.action;
+            pendingFormId = button.dataset.formId;
+            showWarningStep();
+
+            if (pendingAction === "delete") {
+                adminActionTitle.textContent = "Hapus Admin?";
+                adminActionMessage.textContent = `Admin ${button.dataset.username} akan dihapus.`;
+                confirmWarningButton.classList.add("danger-button");
+                confirmWarningButton.classList.remove("success-button");
+                confirmDeleteButton.classList.add("danger-button");
+                confirmDeleteButton.classList.remove("success-button");
+            } else if (pendingAction === "reset") {
+                adminActionTitle.textContent = "Reset Password?";
+                adminActionMessage.textContent = `Password ${button.dataset.username} akan direset.`;
+                confirmWarningButton.classList.add("danger-button");
+                confirmWarningButton.classList.remove("success-button");
+                confirmDeleteButton.classList.add("danger-button");
+                confirmDeleteButton.classList.remove("success-button");
+            } else if (pendingAction === "unblock") {
+                adminActionTitle.textContent = "Unblock Admin?";
+                adminActionMessage.textContent = `Akses login ${button.dataset.username} akan dibuka kembali.`;
+                confirmWarningButton.classList.add("success-button");
+                confirmWarningButton.classList.remove("danger-button");
+                confirmDeleteButton.classList.add("success-button");
+                confirmDeleteButton.classList.remove("danger-button");
+            } else {
+                adminActionTitle.textContent = "Block Admin?";
+                adminActionMessage.textContent = `Akses login ${button.dataset.username} akan diblokir untuk karantina akun.`;
+                confirmWarningButton.classList.add("danger-button");
+                confirmWarningButton.classList.remove("success-button");
+                confirmDeleteButton.classList.add("danger-button");
+                confirmDeleteButton.classList.remove("success-button");
+            }
+
+            openModal();
+        });
+    });
+
+    document.querySelectorAll(".reload-page-button").forEach((button) => {
+        button.addEventListener("click", reloadPage);
+    });
+
+    adminActionModal.addEventListener("click", (event) => {
+        if (event.target === adminActionModal) {
+            reloadPage();
+        }
+    });
+
+    confirmWarningButton.addEventListener("click", () => {
+        if (!pendingFormId) {
+            return;
+        }
+
+        if (pendingAction === "reset") {
+            document.getElementById(pendingFormId).requestSubmit();
+            return;
+        }
+
+        warningActions.classList.add("is-hidden");
+        deletePasswordStep.classList.remove("is-hidden");
+        passwordActions.classList.remove("is-hidden");
+        superAdminPasswordInput.focus();
+    });
+
+    confirmDeleteButton.addEventListener("click", () => {
+        const password = superAdminPasswordInput.value.trim();
+        if (!password) {
+            passwordError.classList.remove("is-hidden");
+            return;
+        }
+
+        const form = document.getElementById(pendingFormId);
+        if (pendingAction === "delete") {
+            form.querySelector("input[name='super_admin_password']").value = password;
+        } else {
+            form.querySelector("input[name='account_block_password']").value = password;
+        }
+        form.requestSubmit();
+    });
+</script>
+{% endblock %}

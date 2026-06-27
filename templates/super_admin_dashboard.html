@@ -1,0 +1,22 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <div class="card">
+        <h3>Super Admin Dashboard</h3>
+        <p>Kelola admin, client, dan data tamu dari satu dashboard yang rapi.</p>
+    </div>
+
+    <div class="card">
+        <h3>Manage Client</h3>
+        <p>Lihat daftar client aktif dan detail kontak mereka.</p>
+        <a class="button-link" href="/users">Buka Client</a>
+    </div>
+
+    <div class="card">
+        <h3>Data</h3>
+        <p>Upload, filter, dan pantau data tamu untuk setiap client.</p>
+        <a class="button-link" href="/admin/guests">Buka Data</a>
+    </div>
+</div>
+{% endblock %}

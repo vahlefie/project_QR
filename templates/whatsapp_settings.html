@@ -1,0 +1,298 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+{% set existing_phone = setting.phone_number or '' %}
+<div class="card">
+    <h3>Setting WhatsApp</h3>
+    <p class="stat">Konfigurasi pengiriman URL QR Code tamu melalui WhatsApp.</p>
+
+    {% if message %}
+        <p class="success-text">{{ message }}</p>
+    {% endif %}
+    {% if error %}
+        <p class="danger-text">{{ error }}</p>
+    {% endif %}
+
+    <div class="subtle-panel whatsapp-info-panel">
+        <h4>Informasi Pengiriman</h4>
+        <p>
+            Mode development memakai wa.me untuk membuka WhatsApp dengan pesan terisi. Pengiriman tetap dilakukan manual.
+            Mode production akan memakai WhatsApp API untuk pengiriman otomatis setelah aplikasi deploy.
+        </p>
+        <p class="hint">
+            Short URL QR tamu memakai format domain/q/&lt;short_code&gt;, contoh http://127.0.0.1:5000/q/3_Ajin_Ajojing.
+        </p>
+    </div>
+
+    <div class="settings-grid">
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <div>
+                    <h4>Mode Pengiriman</h4>
+                    <p>{{ setting.send_mode }}</p>
+                </div>
+            </div>
+            <form action="{{ url_for('admin.update_whatsapp_mode') }}" method="POST" class="settings-inline-form">
+                <select name="send_mode" required>
+                    {% for mode_value, mode_label in send_modes %}
+                        <option value="{{ mode_value }}" {% if setting.send_mode == mode_value %}selected{% endif %}>
+                            {{ mode_label }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Simpan</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <div>
+                    <h4>Nomor WhatsApp</h4>
+                    <p>{{ phone_display }}</p>
+                </div>
+            </div>
+            <form action="{{ url_for('admin.update_whatsapp_phone') }}" method="POST" class="settings-inline-form" id="whatsappPhoneForm">
+                <div class="phone-input">
+                    <span>+62</span>
+                    <input
+                        id="whatsappPhoneLocalInput"
+                        type="text"
+                        inputmode="numeric"
+                        minlength="8"
+                        pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                        title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                        value="{% if existing_phone.startswith('62') %}{{ existing_phone[2:] }}{% else %}{{ existing_phone }}{% endif %}"
+                        required
+                    >
+                    <input id="whatsappPhoneFullInput" type="hidden" name="whatsapp_phone">
+                </div>
+                <button type="submit">Simpan</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <div>
+                    <h4>API WhatsApp</h4>
+                    <p>{{ api_token_display }}</p>
+                </div>
+            </div>
+            <form action="{{ url_for('admin.update_whatsapp_api_token') }}" method="POST" class="settings-inline-form">
+                <input type="password" name="api_token" placeholder="Masukkan API token baru" autocomplete="new-password" required>
+                <button type="submit">Simpan</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <div>
+                    <h4>Phone Number ID</h4>
+                    <p>{{ api_phone_number_id_display }}</p>
+                </div>
+            </div>
+            <form action="{{ url_for('admin.update_whatsapp_api_phone_number_id') }}" method="POST" class="settings-inline-form">
+                <input
+                    type="text"
+                    name="api_phone_number_id"
+                    value="{{ setting.api_phone_number_id or '' }}"
+                    placeholder="Phone Number ID untuk WhatsApp API"
+                    required
+                >
+                <button type="submit">Simpan</button>
+            </form>
+        </section>
+    </div>
+
+    <div class="subtle-panel whatsapp-template-panel">
+        <div class="settings-section-header">
+            <div>
+                <h4>Template Pesan WhatsApp</h4>
+                <p>Gunakan format WhatsApp dan variabel data tamu untuk pesan undangan QR.</p>
+            </div>
+        </div>
+
+        <form action="{{ url_for('admin.whatsapp_settings') }}" method="GET" class="settings-inline-form whatsapp-template-load-form">
+            <select name="template_id">
+                <option value="">Pilih template</option>
+                {% for template in templates %}
+                    <option value="{{ template.id }}" {% if selected_template_id == template.id %}selected{% endif %}>
+                        {{ template.name }}{% if template.is_default %} - Default{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="secondary-button">Load Template</button>
+        </form>
+
+        <form action="{{ url_for('admin.save_whatsapp_message_template') }}" method="POST" id="whatsappTemplateForm">
+            <input type="hidden" name="template_id" value="{{ selected_template_id }}">
+
+            <label class="settings-field-label">
+                <span>Nama Template</span>
+                <input
+                    id="whatsappTemplateName"
+                    class="whatsapp-template-control is-readonly"
+                    type="text"
+                    name="template_name"
+                    value="{{ template_name }}"
+                    maxlength="50"
+                    readonly
+                >
+            </label>
+
+            <div class="whatsapp-format-toolbar" aria-label="Format pesan WhatsApp">
+                <button type="button" class="secondary-button" data-format="bold" disabled>Tebal</button>
+                <button type="button" class="secondary-button" data-format="italic" disabled>Miring</button>
+                <button type="button" class="secondary-button" data-format="strike" disabled>Coret</button>
+                <button type="button" class="secondary-button" data-format="monospace" disabled>Monospace</button>
+            </div>
+
+            <div class="whatsapp-variable-row">
+                {% for variable in template_variables %}
+                    <button type="button" class="secondary-button whatsapp-variable-button" data-variable="{{ variable }}" disabled>
+                        {{ variable }}
+                    </button>
+                {% endfor %}
+            </div>
+
+            <label class="settings-field-label">
+                <span>Isi Pesan</span>
+                <textarea
+                    id="whatsappTemplateBody"
+                    class="whatsapp-template-control is-readonly"
+                    name="template_body"
+                    rows="9"
+                    readonly
+                >{{ template_body }}</textarea>
+            </label>
+
+            <div class="whatsapp-template-preview">
+                <strong>Preview</strong>
+                <p id="whatsappTemplatePreview"></p>
+            </div>
+
+            <div class="detail-actions">
+                <button type="button" class="secondary-button" id="editWhatsappTemplate">Edit</button>
+                <button type="button" class="danger-button is-hidden" id="cancelWhatsappTemplate">Batal</button>
+                <button type="submit" class="is-hidden" id="saveWhatsappTemplate">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const whatsappPhoneForm = document.getElementById("whatsappPhoneForm");
+const whatsappPhoneLocalInput = document.getElementById("whatsappPhoneLocalInput");
+const whatsappPhoneFullInput = document.getElementById("whatsappPhoneFullInput");
+
+whatsappPhoneForm.addEventListener("submit", () => {
+    let localNumber = whatsappPhoneLocalInput.value.trim();
+    if (localNumber.startsWith("62")) {
+        localNumber = localNumber.slice(2);
+    }
+    if (localNumber.startsWith("0")) {
+        localNumber = localNumber.slice(1);
+    }
+    whatsappPhoneFullInput.value = `62${localNumber}`;
+});
+
+const templateForm = document.getElementById("whatsappTemplateForm");
+const templateName = document.getElementById("whatsappTemplateName");
+const templateBody = document.getElementById("whatsappTemplateBody");
+const templatePreview = document.getElementById("whatsappTemplatePreview");
+const editTemplateButton = document.getElementById("editWhatsappTemplate");
+const cancelTemplateButton = document.getElementById("cancelWhatsappTemplate");
+const saveTemplateButton = document.getElementById("saveWhatsappTemplate");
+const formatButtons = templateForm.querySelectorAll("[data-format]");
+const variableButtons = templateForm.querySelectorAll("[data-variable]");
+
+const originalTemplate = {
+    name: templateName.value,
+    body: templateBody.value,
+};
+
+const sampleValues = {
+    "{nama_tamu}": "Ajin Ajojing",
+    "{no_hp}": "628123456789",
+    "{qr_url}": "http://127.0.0.1:5000/qr/token-tamu",
+    "{short_qr_url}": "http://127.0.0.1:5000/q/3_Ajin_Ajojing",
+    "{nama_client}": "Nama Client",
+};
+
+const updateTemplatePreview = () => {
+    let previewText = templateBody.value;
+    Object.entries(sampleValues).forEach(([key, value]) => {
+        previewText = previewText.split(key).join(value);
+    });
+    templatePreview.textContent = previewText || "Preview template pesan akan muncul di sini.";
+};
+
+const setTemplateEditing = (isEditing) => {
+    [templateName, templateBody].forEach((field) => {
+        field.readOnly = !isEditing;
+        field.classList.toggle("is-readonly", !isEditing);
+    });
+
+    formatButtons.forEach((button) => {
+        button.disabled = !isEditing;
+    });
+    variableButtons.forEach((button) => {
+        button.disabled = !isEditing;
+    });
+
+    editTemplateButton.classList.toggle("is-hidden", isEditing);
+    cancelTemplateButton.classList.toggle("is-hidden", !isEditing);
+    saveTemplateButton.classList.toggle("is-hidden", !isEditing);
+
+    if (isEditing) {
+        templateBody.focus();
+    }
+};
+
+const insertAroundSelection = (before, after) => {
+    const start = templateBody.selectionStart;
+    const end = templateBody.selectionEnd;
+    const selectedText = templateBody.value.slice(start, end) || "teks";
+    const nextText = `${before}${selectedText}${after}`;
+
+    templateBody.setRangeText(nextText, start, end, "select");
+    templateBody.focus();
+    updateTemplatePreview();
+};
+
+const insertAtCursor = (text) => {
+    const start = templateBody.selectionStart;
+    const end = templateBody.selectionEnd;
+    templateBody.setRangeText(text, start, end, "end");
+    templateBody.focus();
+    updateTemplatePreview();
+};
+
+editTemplateButton.addEventListener("click", () => setTemplateEditing(true));
+cancelTemplateButton.addEventListener("click", () => {
+    templateName.value = originalTemplate.name;
+    templateBody.value = originalTemplate.body;
+    updateTemplatePreview();
+    setTemplateEditing(false);
+});
+
+formatButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+        const formats = {
+            bold: ["*", "*"],
+            italic: ["_", "_"],
+            strike: ["~", "~"],
+            monospace: ["```", "```"],
+        };
+        const [before, after] = formats[button.dataset.format] || ["", ""];
+        insertAroundSelection(before, after);
+    });
+});
+
+variableButtons.forEach((button) => {
+    button.addEventListener("click", () => insertAtCursor(button.dataset.variable));
+});
+
+templateBody.addEventListener("input", updateTemplatePreview);
+updateTemplatePreview();
+</script>
+{% endblock %}

@@ -1,0 +1,806 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Daftar Client</h3>
+    <p class="stat">Total client: <strong>{{ total_users }}</strong></p>
+
+    {% if message %}
+        <p class="success-text">{{ message }}</p>
+    {% endif %}
+
+    {% if error %}
+        <p class="danger-text">{{ error }}</p>
+    {% endif %}
+
+    <form method="GET" class="toolbar">
+        <input type="text" name="search" placeholder="Cari username, nama, no hp, email..." value="{{ search }}">
+
+        <select name="sort_by">
+            <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Nama A-Z</option>
+            <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Nama Z-A</option>
+        </select>
+
+        <select name="per_page">
+            <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+
+        <button type="submit">Apply</button>
+    </form>
+
+    {% if users %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Username</th>
+                        <th>Nama</th>
+                        <th>No HP</th>
+                        <th>Email</th>
+                        <th>Aktivasi</th>
+                        <th>Action</th>
+                        <th>URL Client</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in users %}
+                    {% set attendance_url_state = attendance_url_states.get(account.id, {}) %}
+                    <tr>
+                        <td>{{ (pagination.page - 1) * per_page + loop.index }}</td>
+                        <td>{{ account.username or 'N/A' }}</td>
+                        <td>{{ account.nama or 'N/A' }}</td>
+                        <td>{{ account.no_hp or 'N/A' }}</td>
+                        <td>{{ account.email or 'N/A' }}</td>
+                        <td>
+                            <span class="status-pill {% if account.aktivasi %}is-active{% else %}is-inactive{% endif %}">
+                                {% if account.aktivasi %}Aktif{% else %}Tidak Aktif{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-group">
+                                {% set block_endpoint = 'admin.unblock_user_account' if account.is_blocked else 'admin.block_user_account' %}
+                                <button
+                                    type="button"
+                                    class="button-link detail-user-button"
+                                    data-modal-id="user-detail-{{ account.id }}"
+                                >
+                                    Detail
+                                </button>
+
+                                <form
+                                    id="reset-user-{{ account.id }}"
+                                    action="/admin/users/{{ account.id }}/reset"
+                                    method="POST"
+                                >
+                                    <input type="hidden" name="search" value="{{ search }}">
+                                    <input type="hidden" name="page" value="{{ pagination.page }}">
+                                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                                    <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                    <button
+                                        type="button"
+                                        class="secondary-button reset-user-button"
+                                        data-form-id="reset-user-{{ account.id }}"
+                                        data-user-name="{{ account.nama or account.username }}"
+                                    >
+                                        Reset
+                                    </button>
+                                </form>
+
+                                <form
+                                    id="block-user-{{ account.id }}"
+                                    action="{{ url_for(block_endpoint, user_id=account.id) }}"
+                                    method="POST"
+                                >
+                                    <input type="hidden" name="search" value="{{ search }}">
+                                    <input type="hidden" name="page" value="{{ pagination.page }}">
+                                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                                    <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                    <input type="hidden" name="account_block_password">
+                                    <button
+                                        type="button"
+                                        class="{% if account.is_blocked %}success-button{% else %}danger-button{% endif %} block-user-button"
+                                        data-form-id="block-user-{{ account.id }}"
+                                        data-action="{% if account.is_blocked %}unblock{% else %}block{% endif %}"
+                                        data-user-name="{{ account.nama or account.username }}"
+                                    >
+                                        {% if account.is_blocked %}Unblock{% else %}Block{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                        <td>
+                            {% if account.aktivasi %}
+                                <button
+                                    type="button"
+                                    class="secondary-button attendance-url-generate-button"
+                                    data-generate-url="{{ url_for('admin.generate_user_attendance_url', user_id=account.id) }}"
+                                    data-user-name="{{ account.nama or account.username }}"
+                                    data-last-generated="{{ attendance_url_state.get('generated_at_text', 'Belum pernah dibuat') }}"
+                                >
+                                    Generate
+                                </button>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% include "_pagination.html" %}
+    {% else %}
+        {% if search %}
+            <p>Tidak ada client sesuai pencarian.</p>
+        {% else %}
+            <p>Belum ada client yang terdaftar.</p>
+        {% endif %}
+    {% endif %}
+</div>
+
+{% for account in users %}
+{% set account_phone = account.no_hp|string if account.no_hp else '' %}
+{% set account_period_start = latest_payment_period_starts.get(account.id) %}
+{% set account_period_end = latest_payment_period_ends.get(account.id) %}
+{% set account_event_name = latest_payment_event_names.get(account.id) %}
+{% set account_package_name = latest_payment_package_names.get(account.id) %}
+<div class="confirm-modal detail-modal is-hidden" id="user-detail-{{ account.id }}" aria-hidden="true">
+    <div class="confirm-dialog detail-dialog" role="dialog" aria-modal="true" aria-labelledby="user-detail-title-{{ account.id }}">
+        <div class="detail-header">
+            <div>
+                <h4 id="user-detail-title-{{ account.id }}">{{ account.nama or account.username }}</h4>
+                <p>{{ account.email or 'N/A' }}</p>
+            </div>
+        </div>
+
+        <form
+            id="user-period-{{ account.id }}"
+            action="/admin/users/{{ account.id }}/period"
+            method="POST"
+            class="detail-edit-form"
+        >
+            <input type="hidden" name="search" value="{{ search }}">
+            <input type="hidden" name="page" value="{{ pagination.page }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <input type="hidden" name="sort_by" value="{{ sort_by }}">
+
+            <h3 class="detail-section-title">Profile</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>Nama</dt>
+                    <dd>
+                        <span class="detail-read-value">{{ account.nama or 'N/A' }}</span>
+                        <input
+                            class="detail-edit-control is-hidden"
+                            type="text"
+                            name="nama"
+                            value="{{ account.nama or '' }}"
+                            maxlength="30"
+                            pattern="[A-Za-z ]+"
+                            title="Nama hanya boleh berisi huruf"
+                            disabled
+                            required
+                        >
+                    </dd>
+                </div>
+                <div>
+                    <dt>No HP</dt>
+                    <dd>
+                        <span class="detail-read-value">{{ account.no_hp or 'N/A' }}</span>
+                        <div class="phone-input detail-edit-field is-hidden">
+                            <span>+62</span>
+                            <input
+                                class="detail-edit-control detail-phone-local-input"
+                                type="text"
+                                inputmode="numeric"
+                                minlength="8"
+                                pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                                title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                                value="{{ account_phone[2:] if account_phone.startswith('62') else account_phone }}"
+                                disabled
+                                required
+                            >
+                            <input
+                                class="detail-phone-full-input"
+                                type="hidden"
+                                name="no_hp"
+                                value="{{ account_phone }}"
+                            >
+                        </div>
+                    </dd>
+                </div>
+                <div>
+                    <dt>Email</dt>
+                    <dd>
+                        <span class="detail-read-value">{{ account.email or 'N/A' }}</span>
+                        <input
+                            class="detail-edit-control is-hidden"
+                            type="text"
+                            name="email"
+                            value="{{ account.email or '' }}"
+                            maxlength="30"
+                            disabled
+                            required
+                        >
+                    </dd>
+                </div>
+                <div>
+                    <dt>Perusahaan</dt>
+                    <dd>
+                        <span class="detail-read-value">{{ account.perusahaan or 'N/A' }}</span>
+                        <input
+                            class="detail-edit-control is-hidden"
+                            type="text"
+                            name="perusahaan"
+                            value="{{ account.perusahaan or '' }}"
+                            maxlength="50"
+                            disabled
+                        >
+                    </dd>
+                </div>
+                <div>
+                    <dt>Alamat</dt>
+                    <dd>
+                        <span class="detail-read-value">{{ account.alamat or 'N/A' }}</span>
+                        <input
+                            class="detail-edit-control is-hidden"
+                            type="text"
+                            name="alamat"
+                            value="{{ account.alamat or '' }}"
+                            maxlength="100"
+                            disabled
+                        >
+                    </dd>
+                </div>
+                <div>
+                    <dt>Kota</dt>
+                    <dd>
+                        <span class="detail-read-value">{{ account.kota or 'N/A' }}</span>
+                        <input
+                            class="detail-edit-control detail-city-input is-hidden"
+                            type="text"
+                            name="kota"
+                            list="city-options-{{ account.id }}"
+                            value="{{ account.kota or '' }}"
+                            maxlength="60"
+                            autocomplete="off"
+                            placeholder="Pilih provinsi dahulu"
+                            disabled
+                        >
+                        <datalist id="city-options-{{ account.id }}"></datalist>
+                    </dd>
+                </div>
+                <div>
+                    <dt>Provinsi</dt>
+                    <dd>
+                        <span class="detail-read-value">{{ account.provinsi or 'N/A' }}</span>
+                        <input
+                            class="detail-edit-control detail-province-input is-hidden"
+                            type="text"
+                            name="provinsi"
+                            list="province-options-{{ account.id }}"
+                            value="{{ account.provinsi or '' }}"
+                            maxlength="50"
+                            autocomplete="off"
+                            placeholder="Ketik / pilih provinsi"
+                            disabled
+                        >
+                        <datalist id="province-options-{{ account.id }}"></datalist>
+                    </dd>
+                </div>
+                <div>
+                    <dt>Tgl Daftar</dt>
+                    <dd>{{ account.tgl_daftar or 'N/A' }}</dd>
+                </div>
+            </dl>
+
+            <h3 class="detail-section-title">Event: {{ account_event_name or 'N/A' }}</h3>
+            <dl class="detail-list">
+                <div>
+                    <dt>Aktivasi</dt>
+                    <dd>{% if account.aktivasi %}Aktif{% else %}Tidak Aktif{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>Paket</dt>
+                    <dd>
+                        {{ account_package_name or 'N/A' }}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Periode Mulai</dt>
+                    <dd>{{ account_period_start or 'N/A' }}</dd>
+                </div>
+                <div>
+                    <dt>Periode Akhir</dt>
+                    <dd>
+                        {{ account_period_end or 'N/A' }}
+                    </dd>
+                </div>
+            </dl>
+        </form>
+
+        <div class="detail-actions">
+            <button type="button" class="edit-user-button">Edit</button>
+            <button type="button" class="secondary-button close-detail-button" data-modal-id="user-detail-{{ account.id }}">Tutup</button>
+            <button type="button" class="success-button save-user-button is-hidden" data-form-id="user-period-{{ account.id }}">Simpan</button>
+            <button type="button" class="danger-button cancel-user-button is-hidden">Batal</button>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<div class="confirm-modal is-hidden" id="saveConfirmModal" aria-hidden="true">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle">
+        <h4 id="saveConfirmTitle">Apakah yakin disimpan?</h4>
+        <div class="confirm-actions">
+            <button type="button" class="secondary-button" id="cancelSaveButton">Tidak</button>
+            <button type="button" class="success-button" id="confirmSaveButton">Ya</button>
+        </div>
+    </div>
+</div>
+
+<div class="confirm-modal is-hidden" id="resetConfirmModal" aria-hidden="true">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="resetConfirmTitle">
+        <h4 id="resetConfirmTitle">Reset Password?</h4>
+        <p class="modal-message" id="resetConfirmMessage"></p>
+        <div class="confirm-actions">
+            <button type="button" class="secondary-button" id="cancelResetButton">Tidak</button>
+            <button type="button" class="danger-button" id="confirmResetButton">Ya</button>
+        </div>
+    </div>
+</div>
+
+<div class="confirm-modal is-hidden" id="blockConfirmModal" aria-hidden="true">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="blockConfirmTitle">
+        <h4 id="blockConfirmTitle"></h4>
+        <p class="modal-message" id="blockConfirmMessage"></p>
+
+        <div class="password-confirm is-hidden" id="blockPasswordStep">
+            <div class="password-field">
+                <input
+                    type="password"
+                    id="blockPasswordInput"
+                    placeholder="Password"
+                    autocomplete="current-password"
+                >
+                <button
+                    type="button"
+                    class="password-toggle-button"
+                    aria-label="Tampilkan password"
+                    title="Tampilkan password"
+                ></button>
+            </div>
+            <p class="danger-text is-hidden" id="blockPasswordError">Password wajib diisi.</p>
+        </div>
+
+        <div class="confirm-actions" id="blockWarningActions">
+            <button type="button" class="secondary-button" id="cancelBlockButton">Tidak</button>
+            <button type="button" class="danger-button" id="confirmBlockWarningButton">Ya</button>
+        </div>
+
+        <div class="confirm-actions is-hidden" id="blockPasswordActions">
+            <button type="button" class="secondary-button" id="cancelBlockPasswordButton">Tidak</button>
+            <button type="button" class="danger-button" id="confirmBlockButton">Proses</button>
+        </div>
+    </div>
+</div>
+
+<div class="confirm-modal is-hidden" id="attendanceUrlModal" aria-hidden="true">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="attendanceUrlTitle">
+        <h4 id="attendanceUrlTitle">Generate URL Client</h4>
+        <p class="modal-message attendance-url-message" id="attendanceUrlMessage"></p>
+        <div class="confirm-actions" id="attendanceUrlConfirmActions">
+            <button type="button" id="confirmAttendanceUrlButton">Ya</button>
+            <button type="button" class="danger-button" id="cancelAttendanceUrlButton">Batal</button>
+        </div>
+        <div class="confirm-actions is-hidden" id="attendanceUrlResultActions">
+            <button type="button" id="openAttendanceUrlButton">Buka</button>
+            <button type="button" class="danger-button" id="closeAttendanceUrlButton">Tutup</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='indonesia_regions.js') }}"></script>
+<script>
+    const saveConfirmModal = document.getElementById("saveConfirmModal");
+    const cancelSaveButton = document.getElementById("cancelSaveButton");
+    const confirmSaveButton = document.getElementById("confirmSaveButton");
+    const resetConfirmModal = document.getElementById("resetConfirmModal");
+    const cancelResetButton = document.getElementById("cancelResetButton");
+    const confirmResetButton = document.getElementById("confirmResetButton");
+    const resetConfirmMessage = document.getElementById("resetConfirmMessage");
+    const blockConfirmModal = document.getElementById("blockConfirmModal");
+    const blockConfirmTitle = document.getElementById("blockConfirmTitle");
+    const blockConfirmMessage = document.getElementById("blockConfirmMessage");
+    const blockPasswordStep = document.getElementById("blockPasswordStep");
+    const blockPasswordInput = document.getElementById("blockPasswordInput");
+    const blockPasswordError = document.getElementById("blockPasswordError");
+    const blockWarningActions = document.getElementById("blockWarningActions");
+    const blockPasswordActions = document.getElementById("blockPasswordActions");
+    const cancelBlockButton = document.getElementById("cancelBlockButton");
+    const cancelBlockPasswordButton = document.getElementById("cancelBlockPasswordButton");
+    const confirmBlockWarningButton = document.getElementById("confirmBlockWarningButton");
+    const confirmBlockButton = document.getElementById("confirmBlockButton");
+    const attendanceUrlModal = document.getElementById("attendanceUrlModal");
+    const attendanceUrlTitle = document.getElementById("attendanceUrlTitle");
+    const attendanceUrlMessage = document.getElementById("attendanceUrlMessage");
+    const attendanceUrlConfirmActions = document.getElementById("attendanceUrlConfirmActions");
+    const attendanceUrlResultActions = document.getElementById("attendanceUrlResultActions");
+    const confirmAttendanceUrlButton = document.getElementById("confirmAttendanceUrlButton");
+    const cancelAttendanceUrlButton = document.getElementById("cancelAttendanceUrlButton");
+    const openAttendanceUrlButton = document.getElementById("openAttendanceUrlButton");
+    const closeAttendanceUrlButton = document.getElementById("closeAttendanceUrlButton");
+    const attendanceUrlNeverGeneratedText = "Belum pernah dibuat";
+    let pendingFormId = null;
+    let pendingResetFormId = null;
+    let pendingBlockFormId = null;
+    let pendingAttendanceButton = null;
+    let generatedAttendanceUrl = "";
+    const regions = window.INDONESIA_REGIONS || {};
+    const provinces = Object.keys(regions);
+
+    function setOptions(datalist, items) {
+        datalist.innerHTML = "";
+        items.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = item;
+            datalist.appendChild(option);
+        });
+    }
+
+    function normalizeLocalPhoneNumber(localNumber) {
+        let normalized = localNumber.trim();
+        if (normalized.startsWith("62")) {
+            normalized = normalized.slice(2);
+        }
+        if (normalized.startsWith("0")) {
+            normalized = normalized.slice(1);
+        }
+        return `62${normalized}`;
+    }
+
+    function syncDetailCityOptions(form, selectedCity = "") {
+        const provinceInput = form.querySelector(".detail-province-input");
+        const cityInput = form.querySelector(".detail-city-input");
+        if (!provinceInput || !cityInput) {
+            return;
+        }
+
+        const cityOptions = document.getElementById(cityInput.getAttribute("list"));
+        const isEditing = form.closest(".detail-dialog").dataset.editing === "true";
+        cityInput.disabled = true;
+        cityInput.value = "";
+
+        if (cityOptions) {
+            cityOptions.innerHTML = "";
+        }
+
+        if (!provinceInput.value || !regions[provinceInput.value] || !cityOptions) {
+            cityInput.placeholder = "Pilih provinsi dahulu";
+            return;
+        }
+
+        setOptions(cityOptions, regions[provinceInput.value]);
+        cityInput.disabled = !isEditing;
+        cityInput.value = selectedCity;
+        cityInput.placeholder = "Ketik / pilih kota atau kabupaten";
+    }
+
+    function initializeDetailRegionInputs(form) {
+        const provinceInput = form.querySelector(".detail-province-input");
+        const cityInput = form.querySelector(".detail-city-input");
+        if (!provinceInput || !cityInput) {
+            return;
+        }
+
+        const provinceOptions = document.getElementById(provinceInput.getAttribute("list"));
+        if (!provinces.length) {
+            provinceInput.placeholder = "Gagal memuat daftar provinsi";
+            return;
+        }
+
+        if (provinceOptions) {
+            setOptions(provinceOptions, provinces);
+        }
+
+        const initialCityValue = cityInput.value;
+        syncDetailCityOptions(form, initialCityValue);
+
+        provinceInput.addEventListener("change", () => {
+            syncDetailCityOptions(form);
+        });
+    }
+
+    function prepareClientDetailForm(form) {
+        const phoneLocalInput = form.querySelector(".detail-phone-local-input");
+        const phoneFullInput = form.querySelector(".detail-phone-full-input");
+        if (phoneLocalInput && phoneFullInput) {
+            phoneFullInput.value = normalizeLocalPhoneNumber(phoneLocalInput.value);
+        }
+    }
+
+    function openModal(modal) {
+        modal.classList.remove("is-hidden");
+        modal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeModal(modal) {
+        modal.classList.add("is-hidden");
+        modal.setAttribute("aria-hidden", "true");
+    }
+
+    function showSaveModal(formId) {
+        pendingFormId = formId;
+        openModal(saveConfirmModal);
+    }
+
+    function reloadPage() {
+        window.location.reload();
+    }
+
+    function showResetModal(formId, userName) {
+        pendingResetFormId = formId;
+        resetConfirmMessage.textContent = `Password ${userName} akan direset ke {{ default_user_reset_password }}.`;
+        openModal(resetConfirmModal);
+    }
+
+    function showBlockWarningStep() {
+        blockPasswordStep.classList.add("is-hidden");
+        blockPasswordActions.classList.add("is-hidden");
+        blockWarningActions.classList.remove("is-hidden");
+        blockPasswordError.classList.add("is-hidden");
+        blockPasswordInput.value = "";
+    }
+
+    function showBlockModal(formId, action, userName) {
+        pendingBlockFormId = formId;
+        showBlockWarningStep();
+        const isUnblock = action === "unblock";
+        blockConfirmTitle.textContent = isUnblock ? "Unblock Client?" : "Block Client?";
+        blockConfirmMessage.textContent = isUnblock
+            ? `Akses login ${userName} akan dibuka kembali.`
+            : `Akses login ${userName} akan diblokir untuk karantina akun.`;
+        confirmBlockWarningButton.classList.toggle("success-button", isUnblock);
+        confirmBlockWarningButton.classList.toggle("danger-button", !isUnblock);
+        confirmBlockButton.classList.toggle("success-button", isUnblock);
+        confirmBlockButton.classList.toggle("danger-button", !isUnblock);
+        openModal(blockConfirmModal);
+    }
+
+    function showAttendanceUrlConfirm(button) {
+        pendingAttendanceButton = button;
+        generatedAttendanceUrl = "";
+        attendanceUrlTitle.textContent = "Generate URL Client";
+        attendanceUrlMessage.textContent = `Terakhir generate pada ${button.dataset.lastGenerated}.\nApakah akan membuat ulang URL?`;
+        attendanceUrlConfirmActions.classList.remove("is-hidden");
+        attendanceUrlResultActions.classList.add("is-hidden");
+        confirmAttendanceUrlButton.disabled = false;
+        openModal(attendanceUrlModal);
+    }
+
+    function generateNewAttendanceUrl(button) {
+        pendingAttendanceButton = button;
+        generatedAttendanceUrl = "";
+        generateAttendanceUrl();
+    }
+
+    function showAttendanceUrlResult(message, attendanceUrl = "") {
+        generatedAttendanceUrl = attendanceUrl;
+        attendanceUrlTitle.textContent = "URL Client";
+        attendanceUrlMessage.textContent = message;
+        attendanceUrlConfirmActions.classList.add("is-hidden");
+        attendanceUrlResultActions.classList.remove("is-hidden");
+        openAttendanceUrlButton.classList.toggle("is-hidden", !attendanceUrl);
+        openModal(attendanceUrlModal);
+    }
+
+    async function generateAttendanceUrl() {
+        if (!pendingAttendanceButton) {
+            return;
+        }
+
+        confirmAttendanceUrlButton.disabled = true;
+        try {
+            const response = await fetch(pendingAttendanceButton.dataset.generateUrl, {
+                method: "POST",
+                headers: { "Accept": "application/json" },
+            });
+            const payload = await response.json();
+            if (!response.ok || payload.status !== "success") {
+                showAttendanceUrlResult(payload.message || "URL publik gagal dibuat.");
+                return;
+            }
+
+            pendingAttendanceButton.dataset.lastGenerated = payload.generated_at || "Belum pernah dibuat";
+            showAttendanceUrlResult(payload.message || "URL publik sudah dibuat.", payload.attendance_url || "");
+        } catch (error) {
+            showAttendanceUrlResult("URL publik gagal dibuat.");
+        } finally {
+            confirmAttendanceUrlButton.disabled = false;
+        }
+    }
+
+    document.querySelectorAll(".detail-user-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            openModal(document.getElementById(button.dataset.modalId));
+        });
+    });
+
+    document.querySelectorAll(".reset-user-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            showResetModal(button.dataset.formId, button.dataset.userName);
+        });
+    });
+
+    document.querySelectorAll(".block-user-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            showBlockModal(button.dataset.formId, button.dataset.action, button.dataset.userName);
+        });
+    });
+
+    document.querySelectorAll(".attendance-url-generate-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            if (button.dataset.lastGenerated === attendanceUrlNeverGeneratedText) {
+                generateNewAttendanceUrl(button);
+                return;
+            }
+            showAttendanceUrlConfirm(button);
+        });
+    });
+
+    document.querySelectorAll(".close-detail-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            if (button.disabled) {
+                return;
+            }
+            closeModal(document.getElementById(button.dataset.modalId));
+        });
+    });
+
+    document.querySelectorAll(".detail-modal").forEach((modal) => {
+        modal.addEventListener("click", (event) => {
+            const dialog = modal.querySelector(".detail-dialog");
+            const isEditing = dialog && dialog.dataset.editing === "true";
+            if (event.target === modal && !isEditing) {
+                closeModal(modal);
+            }
+        });
+    });
+
+    document.querySelectorAll(".detail-dialog").forEach((dialog) => {
+        const editButton = dialog.querySelector(".edit-user-button");
+        const saveButton = dialog.querySelector(".save-user-button");
+        const cancelButton = dialog.querySelector(".cancel-user-button");
+        const closeButton = dialog.querySelector(".close-detail-button");
+        const editForm = dialog.querySelector(".detail-edit-form");
+        const readValues = dialog.querySelectorAll(".detail-read-value");
+        const editControls = dialog.querySelectorAll(".detail-edit-control");
+        const editFields = dialog.querySelectorAll(".detail-edit-field");
+
+        initializeDetailRegionInputs(editForm);
+
+        function setDetailEditMode(isEditing, resetForm = false) {
+            if (resetForm && editForm) {
+                editForm.reset();
+                syncDetailCityOptions(editForm, editForm.querySelector(".detail-city-input")?.value || "");
+            }
+
+            dialog.dataset.editing = String(isEditing);
+            readValues.forEach((value) => value.classList.toggle("is-hidden", isEditing));
+            editFields.forEach((field) => {
+                field.classList.toggle("is-hidden", !isEditing);
+            });
+            editControls.forEach((control) => {
+                control.disabled = !isEditing;
+                control.classList.toggle("is-hidden", !isEditing);
+            });
+            syncDetailCityOptions(editForm, editForm.querySelector(".detail-city-input")?.value || "");
+            editButton.classList.toggle("is-hidden", isEditing);
+            saveButton.classList.toggle("is-hidden", !isEditing);
+            cancelButton.classList.toggle("is-hidden", !isEditing);
+
+            closeButton.disabled = isEditing;
+            closeButton.setAttribute("aria-disabled", String(isEditing));
+        }
+
+        editButton.addEventListener("click", () => {
+            setDetailEditMode(true);
+        });
+
+        saveButton.addEventListener("click", () => {
+            prepareClientDetailForm(editForm);
+            showSaveModal(saveButton.dataset.formId);
+        });
+
+        cancelButton.addEventListener("click", () => {
+            setDetailEditMode(false, true);
+        });
+
+        editForm.addEventListener("submit", () => {
+            prepareClientDetailForm(editForm);
+        });
+    });
+
+    cancelSaveButton.addEventListener("click", reloadPage);
+
+    saveConfirmModal.addEventListener("click", (event) => {
+        if (event.target === saveConfirmModal) {
+            reloadPage();
+        }
+    });
+
+    cancelResetButton.addEventListener("click", reloadPage);
+
+    resetConfirmModal.addEventListener("click", (event) => {
+        if (event.target === resetConfirmModal) {
+            reloadPage();
+        }
+    });
+
+    cancelBlockButton.addEventListener("click", reloadPage);
+    cancelBlockPasswordButton.addEventListener("click", reloadPage);
+
+    blockConfirmModal.addEventListener("click", (event) => {
+        if (event.target === blockConfirmModal) {
+            reloadPage();
+        }
+    });
+
+    cancelAttendanceUrlButton.addEventListener("click", () => {
+        closeModal(attendanceUrlModal);
+    });
+
+    closeAttendanceUrlButton.addEventListener("click", () => {
+        closeModal(attendanceUrlModal);
+    });
+
+    attendanceUrlModal.addEventListener("click", (event) => {
+        if (event.target === attendanceUrlModal) {
+            closeModal(attendanceUrlModal);
+        }
+    });
+
+    confirmSaveButton.addEventListener("click", () => {
+        if (pendingFormId) {
+            document.getElementById(pendingFormId).requestSubmit();
+        }
+    });
+
+    confirmResetButton.addEventListener("click", () => {
+        if (pendingResetFormId) {
+            document.getElementById(pendingResetFormId).requestSubmit();
+        }
+    });
+
+    confirmBlockWarningButton.addEventListener("click", () => {
+        blockWarningActions.classList.add("is-hidden");
+        blockPasswordStep.classList.remove("is-hidden");
+        blockPasswordActions.classList.remove("is-hidden");
+        blockPasswordInput.focus();
+    });
+
+    confirmBlockButton.addEventListener("click", () => {
+        const password = blockPasswordInput.value.trim();
+        if (!password) {
+            blockPasswordError.classList.remove("is-hidden");
+            return;
+        }
+
+        const form = document.getElementById(pendingBlockFormId);
+        form.querySelector("input[name='account_block_password']").value = password;
+        form.requestSubmit();
+    });
+
+    confirmAttendanceUrlButton.addEventListener("click", generateAttendanceUrl);
+
+    openAttendanceUrlButton.addEventListener("click", () => {
+        if (generatedAttendanceUrl) {
+            window.open(generatedAttendanceUrl, "_blank", "noopener");
+        }
+    });
+</script>
+{% endblock %}
