@@ -1,1 +1,0 @@
-# scanqr.github.io
