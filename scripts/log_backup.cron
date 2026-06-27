@@ -1,0 +1,10 @@
+# Backup log bulan sebelumnya.
+# Pasang dengan: crontab scripts/log_backup.cron
+# Sesuaikan /path/to/project_qr dengan path deploy server.
+#
+# Retry dijadwalkan pada tanggal 1 jam 12:00 dan 18:00.
+# Script idempotent: jika backup 00:01 sudah berhasil, run retry hanya no-op karena log bulan sebelumnya sudah bersih.
+
+1 0 1 * * cd /path/to/project_qr && .venv/bin/python scripts/backup_monthly_logs.py >> logs/log_backup_cron.log 2>&1
+0 12 1 * * cd /path/to/project_qr && .venv/bin/python scripts/backup_monthly_logs.py >> logs/log_backup_cron.log 2>&1
+0 18 1 * * cd /path/to/project_qr && .venv/bin/python scripts/backup_monthly_logs.py >> logs/log_backup_cron.log 2>&1

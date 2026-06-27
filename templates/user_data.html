@@ -1,0 +1,686 @@
+{% extends layout_template|default("user_layout.html") %}
+
+{% block content %}
+{% set allow_upload = allow_guest_upload|default(true) %}
+{% set allow_mutations = allow_guest_mutations|default(true) %}
+{% set allow_export = allow_guest_export|default(allow_upload) %}
+{% set show_table = show_guest_table|default(true) %}
+{% set data_route = data_endpoint|default("user_data") %}
+{% set add_guest_route = add_guest_endpoint|default("add_user_guest") %}
+{% set status_route = status_endpoint|default("guests.update_guest_status") %}
+{% set delete_route = delete_endpoint|default("guests.delete_guest_row") %}
+{% set show_qr_column = show_guest_qr_column|default(true) %}
+<div class="card">
+    <h3>Data Tamu</h3>
+    {% if show_table %}
+        <p class="stat">Total daftar tamu: <strong>{{ total_guests }}</strong></p>
+    {% endif %}
+
+    {% if message %}
+        <p class="success-text">{{ message }}</p>
+    {% endif %}
+
+    {% if allow_upload %}
+        <div class="subtle-panel">
+            <h4>Upload File Excel Tamu</h4>
+            <form action="/user/upload" method="POST" enctype="multipart/form-data" class="toolbar">
+                <input type="file" name="file" accept=".xlsx,.xls" required>
+                <button type="submit">Upload</button>
+            </form>
+            <p class="hint">Format Excel: no | nama | no_hp | email | status</p>
+        </div>
+
+        {% if upload_error %}
+            <p class="danger-text">{{ upload_error }}</p>
+        {% endif %}
+    {% endif %}
+
+    <form method="GET" class="toolbar">
+        {% if show_table %}
+            <input type="text" name="search" placeholder="Cari nama, no hp, email..." value="{{ search }}">
+
+            <select name="sort_by">
+                <option value="latest" {% if sort_by == 'latest' %}selected{% endif %}>Terbaru</option>
+                <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Nama A-Z</option>
+                <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Nama Z-A</option>
+                <option value="attendance_desc" {% if sort_by == 'attendance_desc' %}selected{% endif %}>Kehadiran</option>
+            </select>
+
+            <select name="per_page">
+                <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+
+            <button type="submit">Apply</button>
+        {% endif %}
+        {% if allow_export %}
+            <a
+                class="button-link secondary-button"
+                href="{{ url_for('user.download_user_guests', search=search, sort_by=sort_by) }}"
+            >
+                Ekspor Data
+            </a>
+        {% endif %}
+        {% if allow_mutations %}
+            <button type="button" id="openAddGuestModal">Tambah Tamu</button>
+        {% endif %}
+    </form>
+
+    {% if not show_table %}
+        <p class="muted">Masa aktif event sudah berakhir. Data tamu hanya tersedia melalui ekspor final.</p>
+    {% elif total_guests == 0 and not search %}
+        <p>Belum ada data tamu milik kamu.</p>
+    {% elif total_guests == 0 %}
+        <p>Tidak ada data tamu sesuai pencarian.</p>
+    {% else %}
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Nama</th>
+                            <th>No HP</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Kehadiran</th>
+                            <th>Verifikasi</th>
+                            {% if show_qr_column %}
+                                <th>QR Code</th>
+                                <th>WhatsApp</th>
+                            {% endif %}
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for guest in guests %}
+                        <tr id="guest-row-{{ guest.id }}">
+                            <td>{{ (pagination.page - 1) * per_page + loop.index }}</td>
+                            <td>{{ guest.nama }}</td>
+                            <td>{{ guest.no_hp or 'N/A' }}</td>
+                            <td>{{ guest.email or 'N/A' }}</td>
+                            <td class="editable-cell">
+                                <span class="read-value">{{ guest.status or default_guest_status }}</span>
+                                <form
+                                    id="guest-status-form-user-{{ guest.id }}"
+                                    class="guest-status-form edit-control"
+                                    action="{{ url_for(status_route, guest_id=guest.id) }}"
+                                    method="POST"
+                                >
+                                    <input type="hidden" name="search" value="{{ search }}">
+                                    <input type="hidden" name="page" value="{{ pagination.page }}">
+                                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                                    <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                    <select name="status" required>
+                                        {% for status_option in guest_status_options %}
+                                            <option value="{{ status_option }}" {% if (guest.status or default_guest_status) == status_option %}selected{% endif %}>
+                                                {{ status_option }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                            </td>
+                            <td>{{ guest.kehadiran|attendance_time }}</td>
+                            <td>{{ guest.verified_by_staff_name or 'N/A' }}</td>
+                            {% if show_qr_column %}
+                                <td>
+                                    {% set guest_qr_url = build_guest_qr_url(guest) %}
+                                    {% if guest_qr_url %}
+                                        <a class="button-link secondary-button table-action-button" href="{{ guest_qr_url }}" target="_blank" rel="noopener">
+                                            View
+                                        </a>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if guest_qr_url %}
+                                        <a
+                                            class="button-link secondary-button table-action-button"
+                                            href="{{ url_for('guests.send_guest_whatsapp_invite', guest_id=guest.id) }}"
+                                            target="_blank"
+                                            rel="noopener"
+                                        >
+                                            Kirim
+                                        </a>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+                            <td>
+                                <div class="action-group">
+                                    <button
+                                        type="button"
+                                        class="secondary-button table-action-button guest-edit-toggle"
+                                        data-row-id="guest-row-{{ guest.id }}"
+                                        data-form-id="guest-status-form-user-{{ guest.id }}"
+                                    >
+                                        Edit
+                                    </button>
+                                    <form
+                                        action="{{ url_for(delete_route, guest_id=guest.id) }}"
+                                        method="POST"
+                                        class="inline-action-form"
+                                    >
+                                        <input type="hidden" name="search" value="{{ search }}">
+                                        <input type="hidden" name="page" value="{{ pagination.page }}">
+                                        <input type="hidden" name="per_page" value="{{ per_page }}">
+                                        <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                        <button
+                                            type="submit"
+                                            class="danger-button table-action-button guest-delete-toggle"
+                                            data-confirm-message="Yakin hapus data tamu ini?"
+                                        >
+                                            Hapus
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "_pagination.html" %}
+    {% endif %}
+</div>
+
+{% if allow_mutations %}
+{% set add_guest_form_values = add_guest_form|default({}, true) %}
+{% set selected_add_status = add_guest_form_values.get('status', default_guest_status) %}
+{% set add_guest_no_hp = add_guest_form_values.get('no_hp', '') %}
+<div
+    id="addGuestModal"
+    class="confirm-modal {% if not add_guest_error %}is-hidden{% endif %}"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="{{ 'false' if add_guest_error else 'true' }}"
+    aria-labelledby="addGuestTitle"
+>
+    <div class="confirm-dialog detail-dialog">
+        <div class="detail-header">
+            <div>
+                <h4 id="addGuestTitle">Tambah Tamu</h4>
+                <p>Masukkan data tamu baru.</p>
+            </div>
+        </div>
+
+        {% if add_guest_error %}
+            <p class="danger-text">{{ add_guest_error }}</p>
+        {% endif %}
+
+        <form id="addGuestForm" action="{{ url_for(add_guest_route) }}" method="POST" class="user-form">
+            <input type="hidden" name="search" value="{{ search }}">
+            <input type="hidden" name="page" value="{{ pagination.page }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <input type="hidden" name="sort_by" value="{{ sort_by }}">
+
+            <div class="form-grid">
+                <label>
+                    <span>Nama</span>
+                    <input type="text" name="nama" value="{{ add_guest_form_values.get('nama', '') }}" maxlength="30" required>
+                </label>
+                <label>
+                    <span>No HP</span>
+                    <div class="phone-input">
+                        <span>+62</span>
+                        <input
+                            id="addGuestPhoneLocalInput"
+                            type="text"
+                            inputmode="numeric"
+                            minlength="8"
+                            pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                            title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                            value="{% if add_guest_no_hp.startswith('62') %}{{ add_guest_no_hp[2:] }}{% else %}{{ add_guest_no_hp }}{% endif %}"
+                            required
+                        >
+                        <input id="addGuestPhoneFullInput" type="hidden" name="no_hp">
+                    </div>
+                </label>
+                <label>
+                    <span>Email</span>
+                    <input type="email" name="email" value="{{ add_guest_form_values.get('email', '') }}" maxlength="30">
+                </label>
+                <label>
+                    <span>Status</span>
+                    <select name="status" required>
+                        {% for status_option in guest_status_options %}
+                            <option value="{{ status_option }}" {% if selected_add_status == status_option %}selected{% endif %}>
+                                {{ status_option }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+
+            <div class="detail-actions">
+                <button type="button" class="secondary-button" id="cancelAddGuestModal">Batal</button>
+                <button type="submit">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if staff %}
+<div
+    id="staffVerificationModal"
+    class="confirm-modal is-hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="staffVerificationTitle"
+    data-poll-url="{{ url_for('staff.staff_attendance_notification') }}"
+    data-confirm-url-template="{{ url_for('staff.confirm_staff_attendance_notification', request_id=0) }}"
+    data-reject-url-template="{{ url_for('staff.reject_staff_attendance_notification', request_id=0) }}"
+>
+    <div class="confirm-dialog detail-dialog staff-verification-dialog">
+        <div class="detail-header">
+            <div>
+                <h4 id="staffVerificationTitle">Verifikasi Kehadiran</h4>
+                <p id="staffVerificationMessage"></p>
+            </div>
+        </div>
+        <dl class="detail-list staff-verification-details">
+            <div>
+                <dt>Nama</dt>
+                <dd id="staffVerificationGuestName">N/A</dd>
+            </div>
+            <div>
+                <dt>No HP</dt>
+                <dd id="staffVerificationGuestPhone">N/A</dd>
+            </div>
+            <div>
+                <dt>Email</dt>
+                <dd id="staffVerificationGuestEmail">N/A</dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd id="staffVerificationGuestStatus">N/A</dd>
+            </div>
+        </dl>
+        <p class="hint is-hidden" id="staffVerificationCountdown"></p>
+        <div class="detail-actions" id="staffVerificationActions">
+            <button type="button" class="success-button" id="confirmStaffVerification">Konfirmasi</button>
+            <button type="button" class="danger-button" id="rejectStaffVerification">Tolak</button>
+            <button type="button" class="danger-button is-hidden" id="closeStaffVerification">Tutup</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if allow_upload and upload_warning %}
+<div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="uploadWarningTitle">
+    <div class="confirm-dialog">
+        <h4 id="uploadWarningTitle">{{ upload_warning }}</h4>
+        <form action="{{ url_for(data_route) }}" method="GET" class="confirm-actions single-action">
+            <button type="submit">Tutup</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% set upload_popup = pending_upload or upload_result if allow_upload else none %}
+{% if upload_popup %}
+<div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="uploadConfirmTitle">
+    <div class="confirm-dialog detail-dialog guest-upload-dialog">
+        <div class="detail-header">
+            <div>
+                <h4 id="uploadConfirmTitle">Konfirmasi Upload Data Tamu</h4>
+                <p>
+                    {% if pending_upload %}
+                        Hasil cleaning file sudah siap disimpan.
+                    {% else %}
+                        Hasil cleaning file sudah disimpan.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <div class="upload-summary">
+            <div>
+                <span>Data valid</span>
+                <strong>{{ upload_popup.stats.cleaned_count }}</strong>
+            </div>
+            <div>
+                <span>Data yang sama</span>
+                <strong>{{ upload_popup.stats.duplicate_count }}</strong>
+            </div>
+            <div>
+                <span>Dihapus saat cleaning</span>
+                <strong>{{ upload_popup.stats.removed_count }}</strong>
+            </div>
+        </div>
+
+        {% if upload_popup.removed_rows %}
+            <p class="upload-section-title">Data tamu yang dihapus saat cleaning</p>
+            <div class="table-wrap upload-removed-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Baris</th>
+                            <th>No</th>
+                            <th>Nama</th>
+                            <th>No HP</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Alasan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for removed_row in upload_popup.removed_rows %}
+                        <tr>
+                            <td>{{ removed_row.row_number }}</td>
+                            <td>{{ removed_row.no }}</td>
+                            <td>{{ removed_row.nama }}</td>
+                            <td>{{ removed_row.no_hp }}</td>
+                            <td>{{ removed_row.email }}</td>
+                            <td>{{ removed_row.status }}</td>
+                            <td>{{ removed_row.reason }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+        {% if upload_popup.duplicates %}
+            <div class="table-wrap upload-duplicate-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nama</th>
+                            <th>No HP</th>
+                            <th>Email</th>
+                            <th>Sama Pada</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for duplicate in upload_popup.duplicates %}
+                        <tr>
+                            <td>{{ duplicate.nama }}</td>
+                            <td>{{ duplicate.no_hp }}</td>
+                            <td>{{ duplicate.email }}</td>
+                            <td>{{ duplicate.matched_fields }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="muted">Tidak ada data yang sama dengan data tersimpan atau baris lain di file upload.</p>
+        {% endif %}
+
+        {% if pending_upload and pending_upload.stats.duplicate_count > 0 %}
+            <p class="upload-warning">Apakah akan memperbarui data yang sama?</p>
+
+            <form action="/user/upload-confirm" method="POST" class="confirm-actions">
+                <button type="submit" name="include_duplicates" value="yes">Ya</button>
+                <button type="submit" name="include_duplicates" value="no" class="secondary-button">Tidak</button>
+            </form>
+        {% else %}
+            <form action="{{ url_for(data_route) }}" method="GET" class="confirm-actions single-action">
+                <button type="submit">Tutup</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+const setGuestRowEditing = (row, editButton, form, isEditing, resetForm = false) => {
+    const deleteButton = row.querySelector(".guest-delete-toggle");
+
+    if (resetForm) {
+        form.reset();
+    }
+
+    row.classList.toggle("is-editing", isEditing);
+    editButton.dataset.editing = String(isEditing);
+    editButton.textContent = isEditing ? "Simpan" : "Edit";
+    editButton.classList.toggle("secondary-button", !isEditing);
+
+    if (deleteButton) {
+        deleteButton.textContent = isEditing ? "Batal" : "Hapus";
+        deleteButton.classList.add("danger-button");
+        deleteButton.classList.remove("secondary-button");
+    }
+};
+
+document.querySelectorAll(".guest-edit-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+        const row = document.getElementById(button.dataset.rowId);
+        const form = document.getElementById(button.dataset.formId);
+
+        if (button.dataset.editing === "true") {
+            form.requestSubmit();
+            return;
+        }
+
+        setGuestRowEditing(row, button, form, true);
+        form.querySelector("select").focus();
+    });
+});
+
+document.querySelectorAll(".guest-delete-toggle").forEach((button) => {
+    button.addEventListener("click", (event) => {
+        const row = button.closest("tr");
+        const editButton = row.querySelector(".guest-edit-toggle");
+        const form = editButton ? document.getElementById(editButton.dataset.formId) : null;
+
+        if (editButton && editButton.dataset.editing === "true") {
+            event.preventDefault();
+            setGuestRowEditing(row, editButton, form, false, true);
+            return;
+        }
+
+        if (!confirm(button.dataset.confirmMessage || "Yakin hapus data tamu ini?")) {
+            event.preventDefault();
+        }
+    });
+});
+
+const addGuestModal = document.getElementById("addGuestModal");
+const openAddGuestModal = document.getElementById("openAddGuestModal");
+const cancelAddGuestModal = document.getElementById("cancelAddGuestModal");
+const addGuestForm = document.getElementById("addGuestForm");
+const addGuestPhoneLocalInput = document.getElementById("addGuestPhoneLocalInput");
+const addGuestPhoneFullInput = document.getElementById("addGuestPhoneFullInput");
+
+if (addGuestModal && openAddGuestModal && cancelAddGuestModal && addGuestForm) {
+    const openAddGuestDialog = () => {
+        addGuestModal.classList.remove("is-hidden");
+        addGuestModal.setAttribute("aria-hidden", "false");
+        addGuestModal.querySelector("input[name='nama']").focus();
+    };
+
+    const closeAddGuestDialog = () => {
+        addGuestModal.classList.add("is-hidden");
+        addGuestModal.setAttribute("aria-hidden", "true");
+    };
+
+    openAddGuestModal.addEventListener("click", openAddGuestDialog);
+    cancelAddGuestModal.addEventListener("click", closeAddGuestDialog);
+    addGuestModal.addEventListener("click", (event) => {
+        if (event.target === addGuestModal) {
+            closeAddGuestDialog();
+        }
+    });
+
+    addGuestForm.addEventListener("submit", () => {
+        let localNumber = addGuestPhoneLocalInput.value.trim();
+        if (localNumber.startsWith("62")) {
+            localNumber = localNumber.slice(2);
+        }
+        if (localNumber.startsWith("0")) {
+            localNumber = localNumber.slice(1);
+        }
+        addGuestPhoneFullInput.value = `62${localNumber}`;
+    });
+}
+
+const staffVerificationModal = document.getElementById("staffVerificationModal");
+if (staffVerificationModal) {
+    const staffVerificationMessage = document.getElementById("staffVerificationMessage");
+    const staffVerificationGuestName = document.getElementById("staffVerificationGuestName");
+    const staffVerificationGuestPhone = document.getElementById("staffVerificationGuestPhone");
+    const staffVerificationGuestEmail = document.getElementById("staffVerificationGuestEmail");
+    const staffVerificationGuestStatus = document.getElementById("staffVerificationGuestStatus");
+    const staffVerificationCountdown = document.getElementById("staffVerificationCountdown");
+    const confirmStaffVerification = document.getElementById("confirmStaffVerification");
+    const rejectStaffVerification = document.getElementById("rejectStaffVerification");
+    const closeStaffVerification = document.getElementById("closeStaffVerification");
+
+    let currentStaffVerification = null;
+    let closeCountdownTimer = null;
+    let pollingTimer = null;
+    let isStaffVerificationActionBusy = false;
+
+    const buildStaffActionUrl = (template, requestId) => template.replace("/0/", `/${requestId}/`);
+
+    const clearStaffCountdown = () => {
+        if (closeCountdownTimer) {
+            window.clearInterval(closeCountdownTimer);
+            closeCountdownTimer = null;
+        }
+        staffVerificationCountdown.classList.add("is-hidden");
+        staffVerificationCountdown.textContent = "";
+    };
+
+    const closeStaffVerificationModal = () => {
+        currentStaffVerification = null;
+        isStaffVerificationActionBusy = false;
+        clearStaffCountdown();
+        staffVerificationModal.classList.add("is-hidden");
+        staffVerificationModal.setAttribute("aria-hidden", "true");
+    };
+
+    const setStaffVerificationButtonsDisabled = (isDisabled) => {
+        confirmStaffVerification.disabled = isDisabled;
+        rejectStaffVerification.disabled = isDisabled;
+        closeStaffVerification.disabled = isDisabled;
+    };
+
+    const dismissStaffVerification = async () => {
+        if (!currentStaffVerification || isStaffVerificationActionBusy) {
+            closeStaffVerificationModal();
+            return;
+        }
+        isStaffVerificationActionBusy = true;
+        setStaffVerificationButtonsDisabled(true);
+        try {
+            await fetch(buildStaffActionUrl(staffVerificationModal.dataset.rejectUrlTemplate, currentStaffVerification.id), {
+                method: "POST",
+                headers: { "Accept": "application/json" },
+            });
+        } catch (error) {
+            // Popup tetap ditutup lokal; polling berikutnya akan menyinkronkan ulang jika perlu.
+        } finally {
+            closeStaffVerificationModal();
+            setStaffVerificationButtonsDisabled(false);
+        }
+    };
+
+    const startStaffAutoCloseCountdown = (durationSeconds) => {
+        clearStaffCountdown();
+        let remainingSeconds = Number(durationSeconds || 10);
+        staffVerificationCountdown.classList.remove("is-hidden");
+        staffVerificationCountdown.textContent = `Tutup otomatis dalam ${remainingSeconds} detik.`;
+        closeCountdownTimer = window.setInterval(() => {
+            remainingSeconds -= 1;
+            staffVerificationCountdown.textContent = `Tutup otomatis dalam ${remainingSeconds} detik.`;
+            if (remainingSeconds <= 0) {
+                window.clearInterval(closeCountdownTimer);
+                closeCountdownTimer = null;
+                dismissStaffVerification();
+            }
+        }, 1000);
+    };
+
+    const renderStaffVerification = (notification) => {
+        if (!notification) {
+            if (!staffVerificationModal.classList.contains("is-hidden")) {
+                closeStaffVerificationModal();
+            }
+            return;
+        }
+
+        const isNewNotification = !currentStaffVerification || currentStaffVerification.id !== notification.id;
+        currentStaffVerification = notification;
+        const guest = notification.guest || {};
+        const isPending = notification.status === "pending";
+
+        staffVerificationMessage.textContent = notification.message || "Request verifikasi kehadiran.";
+        staffVerificationGuestName.textContent = guest.nama || "N/A";
+        staffVerificationGuestPhone.textContent = guest.no_hp || notification.no_hp || "N/A";
+        staffVerificationGuestEmail.textContent = guest.email || "N/A";
+        staffVerificationGuestStatus.textContent = guest.status || "N/A";
+
+        confirmStaffVerification.classList.toggle("is-hidden", !isPending);
+        rejectStaffVerification.classList.toggle("is-hidden", !isPending);
+        closeStaffVerification.classList.toggle("is-hidden", isPending);
+        setStaffVerificationButtonsDisabled(false);
+
+        staffVerificationModal.classList.remove("is-hidden");
+        staffVerificationModal.setAttribute("aria-hidden", "false");
+
+        if (isPending) {
+            clearStaffCountdown();
+        } else if (isNewNotification) {
+            startStaffAutoCloseCountdown(notification.auto_close_seconds || 10);
+        }
+    };
+
+    const pollStaffVerification = async () => {
+        if (isStaffVerificationActionBusy) {
+            return;
+        }
+        try {
+            const response = await fetch(staffVerificationModal.dataset.pollUrl, {
+                headers: { "Accept": "application/json" },
+            });
+            if (!response.ok) {
+                return;
+            }
+            const payload = await response.json();
+            renderStaffVerification(payload.notification || null);
+        } catch (error) {
+            // Polling berikutnya akan mencoba lagi.
+        }
+    };
+
+    confirmStaffVerification.addEventListener("click", async () => {
+        if (!currentStaffVerification || isStaffVerificationActionBusy) {
+            return;
+        }
+        isStaffVerificationActionBusy = true;
+        setStaffVerificationButtonsDisabled(true);
+        try {
+            await fetch(buildStaffActionUrl(staffVerificationModal.dataset.confirmUrlTemplate, currentStaffVerification.id), {
+                method: "POST",
+                headers: { "Accept": "application/json" },
+            });
+            closeStaffVerificationModal();
+            window.location.reload();
+        } catch (error) {
+            isStaffVerificationActionBusy = false;
+            setStaffVerificationButtonsDisabled(false);
+        }
+    });
+
+    rejectStaffVerification.addEventListener("click", dismissStaffVerification);
+    closeStaffVerification.addEventListener("click", dismissStaffVerification);
+
+    pollStaffVerification();
+    pollingTimer = window.setInterval(pollStaffVerification, 2000);
+    window.addEventListener("beforeunload", () => {
+        if (pollingTimer) {
+            window.clearInterval(pollingTimer);
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,370 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Data Tamu Client</h3>
+    <p class="stat">Total daftar tamu: <strong>{{ total_guests }}</strong></p>
+
+    {% if message %}
+        <p class="success-text">{{ message }}</p>
+    {% endif %}
+
+    <div class="subtle-panel">
+        <h4>Upload File Excel Tamu</h4>
+        <form action="/admin/upload-guests" method="POST" enctype="multipart/form-data" class="toolbar">
+            <select name="owner_user_id" required>
+                <option value="">Pilih client pemilik data</option>
+                {% for account in users %}
+                    <option value="{{ account.id }}" {% if selected_owner_user_id == account.id %}selected{% endif %}>
+                        {{ account.username }}
+                    </option>
+                {% endfor %}
+            </select>
+            <input type="file" name="file" accept=".xlsx,.xls" required>
+            <button type="submit">Upload</button>
+        </form>
+        <p class="hint">Format Excel: no | nama | no_hp | email | status</p>
+    </div>
+
+    {% if upload_error %}
+        <p class="danger-text">{{ upload_error }}</p>
+    {% endif %}
+
+    <form method="GET" class="toolbar">
+        <input type="text" name="search" placeholder="Cari nama, no hp, email..." value="{{ search }}">
+
+        <select name="owner_user_id">
+            <option value="">Semua client</option>
+            {% for account in users %}
+                <option value="{{ account.id }}" {% if selected_owner_user_id == account.id %}selected{% endif %}>
+                    {{ account.username }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <select name="sort_by">
+            <option value="latest" {% if sort_by == 'latest' %}selected{% endif %}>Terbaru</option>
+            <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Nama A-Z</option>
+            <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Nama Z-A</option>
+            <option value="attendance_desc" {% if sort_by == 'attendance_desc' %}selected{% endif %}>Kehadiran</option>
+        </select>
+
+        <select name="per_page">
+            <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+
+        <button type="submit">Apply</button>
+        {% if selected_owner_user_id %}
+            <a class="button-link" href="{{ url_for('admin.download_guests', search=search, sort_by=sort_by, owner_user_id=selected_owner_user_id) }}">Ekspor Data</a>
+        {% else %}
+            <a class="button-link" href="{{ url_for('admin.download_guests', search=search, sort_by=sort_by) }}">Ekspor Data</a>
+        {% endif %}
+    </form>
+
+    {% if selected_owner_user_id and total_guests > 0 %}
+        <form action="/admin/delete-guests" method="POST" class="delete-form">
+            <input type="hidden" name="owner_user_id" value="{{ selected_owner_user_id }}">
+            <button class="danger-button" onclick="return confirm('Yakin hapus semua data tamu client terpilih?')">
+                Hapus Data Client Terpilih
+            </button>
+        </form>
+    {% endif %}
+
+    {% if total_guests == 0 and not search and not selected_owner_user_id %}
+        <p>Belum ada data tamu.</p>
+    {% elif total_guests == 0 %}
+        <p>Tidak ada data tamu sesuai filter.</p>
+    {% else %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Owner</th>
+                            <th>Nama</th>
+                            <th>No HP</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Kehadiran</th>
+                            <th>Verifikasi</th>
+                            <th>QR Code</th>
+                            <th>WhatsApp</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for guest in guests %}
+                        <tr id="guest-row-{{ guest.id }}">
+                            <td>{{ (pagination.page - 1) * per_page + loop.index }}</td>
+                            <td>{{ guest.owner.username if guest.owner else 'Legacy / Tanpa Owner' }}</td>
+                            <td>{{ guest.nama }}</td>
+                            <td>{{ guest.no_hp or 'N/A' }}</td>
+                            <td>{{ guest.email or 'N/A' }}</td>
+                            <td class="editable-cell">
+                                <span class="read-value">{{ guest.status or default_guest_status }}</span>
+                                <form
+                                    id="guest-status-form-admin-{{ guest.id }}"
+                                    class="guest-status-form edit-control"
+                                    action="{{ url_for('guests.update_guest_status', guest_id=guest.id) }}"
+                                    method="POST"
+                                >
+                                    <input type="hidden" name="search" value="{{ search }}">
+                                    <input type="hidden" name="page" value="{{ pagination.page }}">
+                                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                                    <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                    <input type="hidden" name="owner_user_id" value="{{ selected_owner_user_id }}">
+                                    <select name="status" required>
+                                        {% for status_option in guest_status_options %}
+                                            <option value="{{ status_option }}" {% if (guest.status or default_guest_status) == status_option %}selected{% endif %}>
+                                                {{ status_option }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                            </td>
+                            <td>{{ guest.kehadiran|attendance_time }}</td>
+                            <td>{{ guest.verified_by_staff_name or 'N/A' }}</td>
+                            <td>
+                                {% set guest_qr_url = build_guest_qr_url(guest) %}
+                                {% if guest_qr_url %}
+                                    <a class="button-link secondary-button table-action-button" href="{{ guest_qr_url }}" target="_blank" rel="noopener">
+                                        View
+                                    </a>
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if guest_qr_url %}
+                                    <a
+                                        class="button-link secondary-button table-action-button"
+                                        href="{{ url_for('guests.send_guest_whatsapp_invite', guest_id=guest.id) }}"
+                                        target="_blank"
+                                        rel="noopener"
+                                    >
+                                        Kirim
+                                    </a>
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="action-group">
+                                    <button
+                                        type="button"
+                                        class="secondary-button table-action-button guest-edit-toggle"
+                                        data-row-id="guest-row-{{ guest.id }}"
+                                        data-form-id="guest-status-form-admin-{{ guest.id }}"
+                                    >
+                                        Edit
+                                    </button>
+                                    <form
+                                        action="{{ url_for('guests.delete_guest_row', guest_id=guest.id) }}"
+                                        method="POST"
+                                        class="inline-action-form"
+                                    >
+                                        <input type="hidden" name="search" value="{{ search }}">
+                                        <input type="hidden" name="page" value="{{ pagination.page }}">
+                                        <input type="hidden" name="per_page" value="{{ per_page }}">
+                                        <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                        <input type="hidden" name="owner_user_id" value="{{ selected_owner_user_id }}">
+                                        <button
+                                            type="submit"
+                                            class="danger-button table-action-button guest-delete-toggle"
+                                            data-confirm-message="Yakin hapus data tamu ini?"
+                                        >
+                                            Hapus
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "_pagination.html" %}
+    {% endif %}
+</div>
+
+{% if upload_warning %}
+<div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="uploadWarningTitle">
+    <div class="confirm-dialog">
+        <h4 id="uploadWarningTitle">{{ upload_warning }}</h4>
+        <form action="{{ url_for('admin.view_guests') }}" method="GET" class="confirm-actions single-action">
+            {% if selected_owner_user_id %}
+                <input type="hidden" name="owner_user_id" value="{{ selected_owner_user_id }}">
+            {% endif %}
+            <button type="submit">Tutup</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% set upload_popup = pending_upload or upload_result %}
+{% if upload_popup %}
+<div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="uploadConfirmTitle">
+    <div class="confirm-dialog detail-dialog guest-upload-dialog">
+        <div class="detail-header">
+            <div>
+                <h4 id="uploadConfirmTitle">Konfirmasi Upload Data Tamu</h4>
+                <p>
+                    {% if pending_upload %}
+                        Hasil cleaning file sudah siap disimpan.
+                    {% else %}
+                        Hasil cleaning file sudah disimpan.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <div class="upload-summary">
+            <div>
+                <span>Data valid</span>
+                <strong>{{ upload_popup.stats.cleaned_count }}</strong>
+            </div>
+            <div>
+                <span>Data yang sama</span>
+                <strong>{{ upload_popup.stats.duplicate_count }}</strong>
+            </div>
+            <div>
+                <span>Dihapus saat cleaning</span>
+                <strong>{{ upload_popup.stats.removed_count }}</strong>
+            </div>
+        </div>
+
+        {% if upload_popup.removed_rows %}
+            <p class="upload-section-title">Data tamu yang dihapus saat cleaning</p>
+            <div class="table-wrap upload-removed-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Baris</th>
+                            <th>No</th>
+                            <th>Nama</th>
+                            <th>No HP</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Alasan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for removed_row in upload_popup.removed_rows %}
+                        <tr>
+                            <td>{{ removed_row.row_number }}</td>
+                            <td>{{ removed_row.no }}</td>
+                            <td>{{ removed_row.nama }}</td>
+                            <td>{{ removed_row.no_hp }}</td>
+                            <td>{{ removed_row.email }}</td>
+                            <td>{{ removed_row.status }}</td>
+                            <td>{{ removed_row.reason }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+        {% if upload_popup.duplicates %}
+            <div class="table-wrap upload-duplicate-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nama</th>
+                            <th>No HP</th>
+                            <th>Email</th>
+                            <th>Sama Pada</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for duplicate in upload_popup.duplicates %}
+                        <tr>
+                            <td>{{ duplicate.nama }}</td>
+                            <td>{{ duplicate.no_hp }}</td>
+                            <td>{{ duplicate.email }}</td>
+                            <td>{{ duplicate.matched_fields }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="muted">Tidak ada data yang sama dengan data tersimpan atau baris lain di file upload.</p>
+        {% endif %}
+
+        {% if pending_upload and pending_upload.stats.duplicate_count > 0 %}
+            <p class="upload-warning">Apakah akan memperbarui data yang sama?</p>
+
+            <form action="{{ url_for('admin.upload_guests_confirm') }}" method="POST" class="confirm-actions">
+                <button type="submit" name="include_duplicates" value="yes">Ya</button>
+                <button type="submit" name="include_duplicates" value="no" class="secondary-button">Tidak</button>
+            </form>
+        {% else %}
+            <form action="{{ url_for('admin.view_guests') }}" method="GET" class="confirm-actions single-action">
+                {% if selected_owner_user_id %}
+                    <input type="hidden" name="owner_user_id" value="{{ selected_owner_user_id }}">
+                {% endif %}
+                <button type="submit">Tutup</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+const setGuestRowEditing = (row, editButton, form, isEditing, resetForm = false) => {
+    const deleteButton = row.querySelector(".guest-delete-toggle");
+
+    if (resetForm) {
+        form.reset();
+    }
+
+    row.classList.toggle("is-editing", isEditing);
+    editButton.dataset.editing = String(isEditing);
+    editButton.textContent = isEditing ? "Simpan" : "Edit";
+    editButton.classList.toggle("secondary-button", !isEditing);
+
+    if (deleteButton) {
+        deleteButton.textContent = isEditing ? "Batal" : "Hapus";
+        deleteButton.classList.add("danger-button");
+        deleteButton.classList.remove("secondary-button");
+    }
+};
+
+document.querySelectorAll(".guest-edit-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+        const row = document.getElementById(button.dataset.rowId);
+        const form = document.getElementById(button.dataset.formId);
+
+        if (button.dataset.editing === "true") {
+            form.requestSubmit();
+            return;
+        }
+
+        setGuestRowEditing(row, button, form, true);
+        form.querySelector("select").focus();
+    });
+});
+
+document.querySelectorAll(".guest-delete-toggle").forEach((button) => {
+    button.addEventListener("click", (event) => {
+        const row = button.closest("tr");
+        const editButton = row.querySelector(".guest-edit-toggle");
+        const form = editButton ? document.getElementById(editButton.dataset.formId) : null;
+
+        if (editButton && editButton.dataset.editing === "true") {
+            event.preventDefault();
+            setGuestRowEditing(row, editButton, form, false, true);
+            return;
+        }
+
+        if (!confirm(button.dataset.confirmMessage || "Yakin hapus data tamu ini?")) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}

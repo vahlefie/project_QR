@@ -1,0 +1,69 @@
+{% extends "user_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Profile</h3>
+
+    <dl class="detail-list">
+        <div>
+            <dt>Nama</dt>
+            <dd>{{ account.nama or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>No HP</dt>
+            <dd>{{ account.no_hp or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Email</dt>
+            <dd>{{ account.email or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Perusahaan</dt>
+            <dd>{{ account.perusahaan or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Alamat</dt>
+            <dd>{{ account.alamat or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Kota</dt>
+            <dd>{{ account.kota or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Provinsi</dt>
+            <dd>{{ account.provinsi or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Tgl Daftar</dt>
+            <dd>{{ account.tgl_daftar or 'N/A' }}</dd>
+        </div>
+    </dl>
+</div>
+
+
+
+<div class="card">
+    <h3>Event: {{ profile_event_name or 'N/A' }}</h3>
+
+    <dl class="detail-list">
+        <div>
+            <dt>Aktivasi</dt>
+            <dd>
+                {% if account.aktivasi %}Aktif{% else %}Tidak Aktif{% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Paket</dt>
+            <dd>{{ profile_package_name or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Periode Mulai</dt>
+            <dd>{{ profile_period_start or 'N/A' }}</dd>
+        </div>
+        <div>
+            <dt>Periode Akhir</dt>
+            <dd>{{ profile_period_end or 'N/A' }}</dd>
+        </div>
+    </dl>
+</div>
+{% endblock %}

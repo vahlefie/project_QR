@@ -1,0 +1,222 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Payment Client</h3>
+    <p class="stat">Total kas masuk: <strong>{{ total_cash_in|rupiah }}</strong></p>
+
+    {% if message %}
+        <p class="success-text">{{ message }}</p>
+    {% endif %}
+
+    {% if error %}
+        <p class="danger-text">{{ error }}</p>
+    {% endif %}
+
+    <div class="subtle-panel">
+        <h4>Input Payment</h4>
+        <form action="/admin/payment/input" method="POST">
+            <div class="form-grid">
+                <label>
+                    <span>Client *</span>
+                    <select name="owner_user_id" required>
+                        <option value="">Pilih client</option>
+                        {% for account in clients %}
+                            <option value="{{ account.id }}" {% if selected_owner_user_id == account.id %}selected{% endif %}>
+                                {{ account.nama or account.username }}{% if account.no_hp %} - {{ account.no_hp }}{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    <span>Tanggal Payment *</span>
+                    <input type="date" name="payment_date" value="{{ today }}" required>
+                </label>
+
+                <label>
+                    <span>Waktu Payment *</span>
+                    <input type="time" name="payment_time" required>
+                </label>
+
+                <label>
+                    <span>Nominal *</span>
+                    <input type="text" name="amount" inputmode="numeric" placeholder="Contoh: 150000" required>
+                </label>
+
+                <label>
+                    <span>Metode</span>
+                    <select name="payment_method">
+                        <option value="Transfer">Transfer</option>
+                        <option value="Cash">Cash</option>
+                        <option value="QRIS">QRIS</option>
+                        <option value="Virtual Account">Virtual Account</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Bank Asal</span>
+                    <select name="origin_bank" id="originBankInput" required>
+                        <option value="">Pilih bank</option>
+                        <option value="N/A">N/A</option>
+                        {% for bank in bank_options %}
+                            <option value="{{ bank }}">{{ bank }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    <span>Nomor Rekening</span>
+                    <input
+                        type="text"
+                        name="account_number"
+                        id="accountNumberInput"
+                        inputmode="numeric"
+                        minlength="10"
+                        maxlength="16"
+                        pattern="[0-9]{10,16}"
+                        title="Nomor Rekening harus 10 - 16 digit angka"
+                        required
+                    >
+                </label>
+
+                <label>
+                    <span>Jenis Bayar *</span>
+                    <select name="payment_type" required>
+                        {% for payment_type in payment_type_options %}
+                            <option value="{{ payment_type }}">{{ payment_type }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    <span>Paket *</span>
+                    <select name="package_name" required>
+                        {% for package in package_options %}
+                            <option value="{{ package }}">{{ package|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    <span>Periode Mulai *</span>
+                    <input type="date" name="period_start" required>
+                </label>
+
+                <label>
+                    <span>Periode Akhir *</span>
+                    <input type="date" name="period_end" min="{{ min_period_end_date }}" required>
+                </label>
+
+                <label>
+                    <span>Catatan</span>
+                    <input type="text" name="notes" maxlength="255" placeholder="Opsional">
+                </label>
+            </div>
+
+            <div class="form-grid wide-form-grid">
+                <label>
+                    <span>Nama Event *</span>
+                    <input type="text" name="event_name" maxlength="120" required>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="success-button">Input Payment</button>
+            </div>
+        </form>
+    </div>
+
+    <form method="GET" class="toolbar">
+        <select name="owner_user_id">
+            <option value="">Semua client</option>
+            {% for account in clients %}
+                <option value="{{ account.id }}" {% if selected_owner_user_id == account.id %}selected{% endif %}>
+                    {{ account.nama or account.username }}
+                </option>
+            {% endfor %}
+        </select>
+        <button type="submit">Apply</button>
+    </form>
+
+    {% if payments %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Tanggal</th>
+                        <th>Waktu</th>
+                        <th>Client</th>
+                        <th>No HP</th>
+                        <th>Paket</th>
+                        <th>Periode</th>
+                        <th>Nominal</th>
+                        <th>Metode</th>
+                        <th>Bank Asal</th>
+                        <th>Nomor Rekening</th>
+                        <th>Jenis Bayar</th>
+                        <th>Status</th>
+                        <th>Event</th>
+                        <th>Catatan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ payment.payment_date or 'N/A' }}</td>
+                            <td>{{ payment.payment_time.strftime('%H:%M') if payment.payment_time else 'N/A' }}</td>
+                            <td>{{ payment.client.nama or payment.client.username if payment.client else 'N/A' }}</td>
+                            <td>{{ payment.client.no_hp if payment.client and payment.client.no_hp else 'N/A' }}</td>
+                            <td>{{ payment.package_name|capitalize if payment.package_name else 'N/A' }}</td>
+                            <td>
+                                {% if payment.period_start or payment.period_end %}
+                                    {{ payment.period_start or 'N/A' }} - {{ payment.period_end or 'N/A' }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ payment.amount|rupiah }}</td>
+                            <td>{{ payment.payment_method or 'N/A' }}</td>
+                            <td>{{ payment.origin_bank or 'N/A' }}</td>
+                            <td>{{ payment.account_number or 'N/A' }}</td>
+                            <td>{{ payment.payment_type or 'N/A' }}</td>
+                            <td><span class="status-pill is-active">{{ payment.status|capitalize }}</span></td>
+                            <td>{{ payment.event_name or 'N/A' }}</td>
+                            <td>{{ payment.notes or 'N/A' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>Belum ada transaksi pembayaran.</p>
+    {% endif %}
+</div>
+
+<script>
+    const paymentMethodSelect = document.querySelector("select[name='payment_method']");
+    const originBankInput = document.getElementById("originBankInput");
+    const accountNumberInput = document.getElementById("accountNumberInput");
+
+    function syncTransferFields() {
+        const isTransfer = paymentMethodSelect.value === "Transfer";
+        [originBankInput, accountNumberInput].forEach((input) => {
+            input.disabled = !isTransfer;
+            input.required = isTransfer;
+            if (!isTransfer) {
+                input.value = "N/A";
+            } else if (input.value === "N/A") {
+                input.value = "";
+            }
+        });
+    }
+
+    if (paymentMethodSelect && originBankInput && accountNumberInput) {
+        paymentMethodSelect.addEventListener("change", syncTransferFields);
+        syncTransferFields();
+    }
+</script>
+{% endblock %}

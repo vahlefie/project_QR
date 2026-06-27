@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if session.get('role') == 'super_admin' %}Super Admin{% else %}Admin{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="app">
+    <div class="sidebar" id="appSidebar">
+        <h2>{% if session.get('role') == 'super_admin' %}Super Admin{% else %}Admin{% endif %}</h2>
+        {% if session.get('role') == 'super_admin' %}
+            <div class="sidebar-panels" data-sidebar-panels>
+                <div class="sidebar-panel is-active" data-sidebar-panel="main">
+                    <a href="/super-admin/dashboard" class="{% if request.path == '/super-admin/dashboard' %}active{% endif %}">Dashboard</a>
+                    <button type="button" class="sidebar-menu-button" data-sidebar-open="client">Client</button>
+                    <button type="button" class="sidebar-menu-button" data-sidebar-open="admin">Admin</button>
+                    <button type="button" class="sidebar-menu-button" data-sidebar-open="setting">Setting</button>
+                    <a href="/logout" class="logout">Logout</a>
+                </div>
+
+                <div class="sidebar-panel" data-sidebar-panel="client" aria-hidden="true">
+                    <button type="button" class="sidebar-back-button" data-sidebar-back>&lt; Client</button>
+                    <a href="/admin/users/new" class="{% if request.path == '/admin/users/new' %}active{% endif %}">Tambah Client</a>
+                    <a href="/users" class="{% if request.path == '/users' %}active{% endif %}">Manage Client</a>
+                    <a href="/admin/guests" class="{% if request.path == '/admin/guests' %}active{% endif %}">Data</a>
+                    <a href="/admin/payment" class="{% if request.path == '/admin/payment' %}active{% endif %}">Payment</a>
+                    <a href="/logout" class="logout">Logout</a>
+                </div>
+
+                <div class="sidebar-panel" data-sidebar-panel="admin" aria-hidden="true">
+                    <button type="button" class="sidebar-back-button" data-sidebar-back>&lt; Admin</button>
+                    <a href="/super-admin/admins/new" class="{% if request.path == '/super-admin/admins/new' %}active{% endif %}">Tambah Admin</a>
+                    <a href="/super-admin/admins" class="{% if request.path == '/super-admin/admins' %}active{% endif %}">Manage Admin</a>
+                    <a href="/logout" class="logout">Logout</a>
+                </div>
+
+                <div class="sidebar-panel" data-sidebar-panel="setting" aria-hidden="true">
+                    <button type="button" class="sidebar-back-button" data-sidebar-back>&lt; Setting</button>
+                    <a href="/password/new" class="{% if request.path == '/password/new' %}active{% endif %}">Password</a>
+                    <a href="#" class="sidebar-disabled-link" aria-disabled="true">Email</a>
+                    <a href="/super-admin/settings/whatsapp" class="{% if request.path == '/super-admin/settings/whatsapp' %}active{% endif %}">WhatsApp</a>
+                    <a href="/logout" class="logout">Logout</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="sidebar-panels" data-sidebar-panels>
+                <div class="sidebar-panel is-active" data-sidebar-panel="main">
+                    <a href="/admin/dashboard" class="{% if request.path == '/admin/dashboard' %}active{% endif %}">Dashboard</a>
+                    <button type="button" class="sidebar-menu-button" data-sidebar-open="client">Client</button>
+                    <button type="button" class="sidebar-menu-button" data-sidebar-open="setting">Setting</button>
+                    <a href="/logout" class="logout">Logout</a>
+                </div>
+
+                <div class="sidebar-panel" data-sidebar-panel="client" aria-hidden="true">
+                    <button type="button" class="sidebar-back-button" data-sidebar-back>&lt; Client</button>
+                    <a href="/users" class="{% if request.path == '/users' %}active{% endif %}">Manage Client</a>
+                    <a href="/admin/users/new" class="{% if request.path == '/admin/users/new' %}active{% endif %}">Tambah Client</a>
+                    <a href="/admin/guests" class="{% if request.path == '/admin/guests' %}active{% endif %}">Data</a>
+                    <a href="/admin/payment" class="{% if request.path == '/admin/payment' %}active{% endif %}">Payment</a>
+                    <a href="/logout" class="logout">Logout</a>
+                </div>
+
+                <div class="sidebar-panel" data-sidebar-panel="setting" aria-hidden="true">
+                    <button type="button" class="sidebar-back-button" data-sidebar-back>&lt; Setting</button>
+                    <a href="#" class="sidebar-disabled-link" aria-disabled="true">Nomor HP</a>
+                    <a href="/password/new" class="{% if request.path == '/password/new' %}active{% endif %}">Password</a>
+                    <a href="#" class="sidebar-disabled-link" aria-disabled="true">Email</a>
+                    <a href="/logout" class="logout">Logout</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="main">
+        <div class="topbar">
+            <button
+                type="button"
+                class="sidebar-toggle"
+                aria-controls="appSidebar"
+                aria-expanded="true"
+                aria-label="Sembunyikan sidebar"
+                title="Sembunyikan sidebar"
+            ></button>
+            <span>{% if session.get('role') == 'super_admin' %}Super Admin{% else %}Admin{% endif %}: {{ user }}</span>
+        </div>
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='password_toggle.js') }}"></script>
+<script src="{{ url_for('static', filename='sidebar_toggle.js') }}"></script>
+<script src="{{ url_for('static', filename='super_admin_sidebar.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="app">
+    <div class="sidebar" id="appSidebar">
+        <h2>Client</h2>
+        <a href="/user/dashboard" class="{% if request.path == '/user/dashboard' %}active{% endif %}">Dashboard</a>
+        <a href="/user/data" class="{% if request.path == '/user/data' %}active{% endif %}">Data</a>
+        {% if can_access_guest_scan %}
+            <a href="/user/scan" class="{% if request.path == '/user/scan' %}active{% endif %}">Scan</a>
+        {% else %}
+            <span class="sidebar-disabled-link" role="link" aria-disabled="true">Scan</span>
+        {% endif %}
+        {% if can_access_client_staff %}
+            <a href="/user/staff" class="{% if request.path == '/user/staff' %}active{% endif %}">Staff</a>
+        {% else %}
+            <span class="sidebar-disabled-link" role="link" aria-disabled="true">Staff</span>
+        {% endif %}
+        <a href="/user/payment" class="{% if request.path == '/user/payment' %}active{% endif %}">Payment</a>
+        <a href="/profile" class="{% if request.path == '/profile' %}active{% endif %}">Profile</a>
+        <a href="/logout" class="logout">Logout</a>
+    </div>
+
+    <div class="main">
+        <div class="topbar">
+            <button
+                type="button"
+                class="sidebar-toggle"
+                aria-controls="appSidebar"
+                aria-expanded="true"
+                aria-label="Sembunyikan sidebar"
+                title="Sembunyikan sidebar"
+            ></button>
+            <span>Client: {{ user }}</span>
+        </div>
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='password_toggle.js') }}"></script>
+<script src="{{ url_for('static', filename='sidebar_toggle.js') }}"></script>
+</body>
+</html>

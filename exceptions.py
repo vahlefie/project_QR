@@ -1,0 +1,2 @@
+class UploadValidationError(Exception):
+    pass

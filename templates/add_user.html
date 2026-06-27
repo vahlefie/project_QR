@@ -1,0 +1,277 @@
+{% extends "admin_layout.html" %}
+
+{% block content %}
+<div class="card">
+    <h3>Tambah Client</h3>
+    <p>Isi data client baru. Tanggal daftar akan dibuat otomatis saat data disimpan.</p>
+
+    {% if error %}
+        <p class="danger-text">{{ error }}</p>
+    {% endif %}
+
+    <form method="POST" class="user-form">
+        <div class="form-grid">
+            <label>
+                <span>Nama Lengkap*</span>
+                <input
+                    type="text"
+                    name="nama"
+                    maxlength="30"
+                    pattern="[A-Za-z ]+"
+                    title="Nama hanya boleh berisi huruf"
+                    value="{{ form_data.get('nama', '') }}"
+                    required
+                >
+            </label>
+
+            <label>
+                <span>Password*</span>
+                <div class="password-row">
+                    <div class="password-field">
+                        <input
+                            id="passwordInput"
+                            type="password"
+                            name="password"
+                            minlength="8"
+                            pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}"
+                            title="Password minimal 8 karakter dan harus kombinasi huruf besar, huruf kecil, dan angka"
+                            required
+                        >
+                        <button
+                            type="button"
+                            class="password-toggle-button"
+                            aria-label="Tampilkan password"
+                            title="Tampilkan password"
+                        ></button>
+                    </div>
+                    <button type="button" class="secondary-button generate-button" id="generatePasswordButton">
+                        Generate
+                    </button>
+                </div>
+            </label>
+
+            <div class="generated-password form-wide">
+                <label>
+                    <span>Hasil Generate Password</span>
+                    <div class="password-row">
+                        <input id="generatedPasswordOutput" type="text" readonly>
+                        <button type="button" class="secondary-button copy-button" id="copyPasswordButton">
+                            Copy
+                        </button>
+                    </div>
+                </label>
+                <p class="hint" id="copyPasswordHint">Password hasil generate akan tampil di sini.</p>
+            </div>
+
+            <label>
+                <span>No HP*</span>
+                <div class="phone-input">
+                    <span>+62</span>
+                    <input
+                        id="phoneLocalInput"
+                        type="text"
+                        inputmode="numeric"
+                        minlength="8"
+                        pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                        title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                        value="{% if form_data.get('no_hp', '').startswith('62') %}{{ form_data.get('no_hp', '')[2:] }}{% else %}{{ form_data.get('no_hp', '') }}{% endif %}"
+                        required
+                    >
+                    <input id="phoneFullInput" type="hidden" name="no_hp">
+                </div>
+            </label>
+
+            <label>
+                <span>Alamat</span>
+                <input
+                    type="text"
+                    name="alamat"
+                    maxlength="100"
+                    value="{{ form_data.get('alamat', '') }}"
+                >
+            </label>
+
+            <label>
+                <span>Email*</span>
+                <input
+                    type="text"
+                    name="email"
+                    maxlength="30"
+                    value="{{ form_data.get('email', '') }}"
+                    required
+                >
+            </label>
+
+            <label>
+                <span>Provinsi</span>
+                <input
+                    id="provinceInput"
+                    type="text"
+                    name="provinsi"
+                    list="provinceOptions"
+                    autocomplete="off"
+                    value="{{ form_data.get('provinsi', '') }}"
+                    placeholder="Ketik / pilih provinsi"
+                >
+                <datalist id="provinceOptions"></datalist>
+            </label>
+
+            <label>
+                <span>Perusahaan</span>
+                <input
+                    type="text"
+                    name="perusahaan"
+                    maxlength="50"
+                    value="{{ form_data.get('perusahaan', '') }}"
+                >
+            </label>
+
+            <label>
+                <span>Kota / Kabupaten</span>
+                <input
+                    id="cityInput"
+                    type="text"
+                    name="kota"
+                    list="cityOptions"
+                    maxlength="60"
+                    autocomplete="off"
+                    value="{{ form_data.get('kota', '') }}"
+                    placeholder="Pilih provinsi dahulu"
+                    disabled
+                >
+                <datalist id="cityOptions"></datalist>
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <a class="secondary-link" href="/users">Batal</a>
+            <button type="submit">Tambah Client</button>
+        </div>
+    </form>
+</div>
+
+<script src="{{ url_for('static', filename='indonesia_regions.js') }}"></script>
+<script>
+    const passwordInput = document.getElementById("passwordInput");
+    const generatedPasswordOutput = document.getElementById("generatedPasswordOutput");
+    const generatePasswordButton = document.getElementById("generatePasswordButton");
+    const copyPasswordButton = document.getElementById("copyPasswordButton");
+    const copyPasswordHint = document.getElementById("copyPasswordHint");
+    const userForm = document.querySelector(".user-form");
+    const phoneLocalInput = document.getElementById("phoneLocalInput");
+    const phoneFullInput = document.getElementById("phoneFullInput");
+    const provinceInput = document.getElementById("provinceInput");
+    const provinceOptions = document.getElementById("provinceOptions");
+    const cityInput = document.getElementById("cityInput");
+    const cityOptions = document.getElementById("cityOptions");
+    const initialCityValue = cityInput.value;
+    const regions = window.INDONESIA_REGIONS || {};
+    const provinces = Object.keys(regions);
+    const letters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const specials = "!@#$%&*?";
+    const allCharacters = letters + numbers + specials;
+
+    function randomCharacter(source) {
+        const randomValues = new Uint32Array(1);
+        crypto.getRandomValues(randomValues);
+        return source[randomValues[0] % source.length];
+    }
+
+    function shuffleCharacters(characters) {
+        const shuffled = characters.split("");
+        for (let index = shuffled.length - 1; index > 0; index -= 1) {
+            const randomValues = new Uint32Array(1);
+            crypto.getRandomValues(randomValues);
+            const randomIndex = randomValues[0] % (index + 1);
+            [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+        }
+        return shuffled.join("");
+    }
+
+    function generatePassword() {
+        let password = randomCharacter(letters) + randomCharacter(numbers) + randomCharacter(specials);
+        while (password.length < 12) {
+            password += randomCharacter(allCharacters);
+        }
+        return shuffleCharacters(password);
+    }
+
+    function setOptions(datalist, items) {
+        datalist.innerHTML = "";
+        items.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = item;
+            datalist.appendChild(option);
+        });
+    }
+
+    function loadProvinces() {
+        if (!provinces.length) {
+            provinceInput.placeholder = "Gagal memuat daftar provinsi";
+            return;
+        }
+
+        setOptions(provinceOptions, provinces);
+        if (regions[provinceInput.value]) {
+            loadCities(provinceInput.value, initialCityValue);
+        }
+    }
+
+    function loadCities(provinceName, selectedCity = "") {
+        cityInput.disabled = true;
+        cityInput.value = "";
+        cityOptions.innerHTML = "";
+
+        if (!provinceName || !regions[provinceName]) {
+            cityInput.placeholder = "Pilih provinsi dahulu";
+            return;
+        }
+
+        setOptions(cityOptions, regions[provinceName]);
+        cityInput.disabled = false;
+        cityInput.value = selectedCity;
+        cityInput.placeholder = "Ketik / pilih kota atau kabupaten";
+    }
+
+    provinceInput.addEventListener("change", () => {
+        loadCities(provinceInput.value);
+    });
+
+    generatePasswordButton.addEventListener("click", () => {
+        const password = generatePassword();
+        passwordInput.value = password;
+        generatedPasswordOutput.value = password;
+        copyPasswordHint.textContent = "Password siap digunakan dan bisa di-copy.";
+    });
+
+    copyPasswordButton.addEventListener("click", async () => {
+        if (!generatedPasswordOutput.value) {
+            copyPasswordHint.textContent = "Generate password terlebih dahulu.";
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(generatedPasswordOutput.value);
+            copyPasswordHint.textContent = "Password berhasil di-copy.";
+        } catch (error) {
+            generatedPasswordOutput.select();
+            document.execCommand("copy");
+            copyPasswordHint.textContent = "Password berhasil di-copy.";
+        }
+    });
+
+    userForm.addEventListener("submit", () => {
+        let localNumber = phoneLocalInput.value.trim();
+        if (localNumber.startsWith("62")) {
+            localNumber = localNumber.slice(2);
+        }
+        if (localNumber.startsWith("0")) {
+            localNumber = localNumber.slice(1);
+        }
+        phoneFullInput.value = `62${localNumber}`;
+    });
+
+    loadProvinces();
+</script>
+{% endblock %}

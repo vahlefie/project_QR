@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Kehadiran</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="center attendance-center">
+        <div class="card attendance-card guest-qr-card">
+            <h2>QR Code</h2>
+
+            {% if not is_available %}
+                <p class="danger-text attendance-error">{{ already_verified_message }}</p>
+            {% elif is_verified %}
+                {% if show_welcome %}
+                    <p class="guest-qr-message">{{ welcome_message }}</p>
+                    <p class="guest-qr-close-text">Silahkan untuk menutup browser ini</p>
+                {% else %}
+                    <p class="guest-qr-message">{{ already_verified_message }}</p>
+                {% endif %}
+            {% else %}
+                <div id="guestQrActive">
+                    <p class="attendance-owner">{{ owner_user.perusahaan or owner_user.nama or owner_user.username }}</p>
+                    <div class="guest-qr-frame">
+                        <img src="{{ qr_image_url }}" alt="QR Code {{ guest.nama }}">
+                    </div>
+                    <p class="guest-qr-name">{{ guest.nama }}</p>
+                    <p
+                        id="guestQrTimer"
+                        class="guest-qr-timer"
+                        data-duration="{{ qr_page_ttl_seconds }}"
+                    >05:00</p>
+                </div>
+                <div id="guestQrExpired" class="is-hidden">
+                    <p class="guest-qr-message">Halaman QR Code Sudah Expired.</p>
+                    <p class="guest-qr-expired-text">Silahkan buka ulang link URL QR Code.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if is_available and not is_verified %}
+    <script>
+    const qrStatusUrl = "{{ status_url }}";
+    const guestQrActive = document.getElementById("guestQrActive");
+    const guestQrExpired = document.getElementById("guestQrExpired");
+    const guestQrTimer = document.getElementById("guestQrTimer");
+    const qrPageDurationSeconds = Number.parseInt(guestQrTimer.dataset.duration, 10) || 300;
+    const qrPageExpiresAt = Date.now() + (qrPageDurationSeconds * 1000);
+    let qrStatusTimer = null;
+    let qrCountdownTimer = null;
+
+    const reloadVerifiedPage = () => {
+        const verifiedUrl = new URL(window.location.href);
+        verifiedUrl.searchParams.set("verified", "1");
+        window.location.replace(verifiedUrl.toString());
+    };
+
+    const formatRemainingTime = (remainingSeconds) => {
+        const minutes = String(Math.floor(remainingSeconds / 60)).padStart(2, "0");
+        const seconds = String(remainingSeconds % 60).padStart(2, "0");
+        return `${minutes}:${seconds}`;
+    };
+
+    const expireQrPage = () => {
+        if (qrStatusTimer) {
+            window.clearInterval(qrStatusTimer);
+        }
+        if (qrCountdownTimer) {
+            window.clearInterval(qrCountdownTimer);
+        }
+        guestQrActive.classList.add("is-hidden");
+        guestQrExpired.classList.remove("is-hidden");
+    };
+
+    const updateQrCountdown = () => {
+        const remainingSeconds = Math.max(0, Math.ceil((qrPageExpiresAt - Date.now()) / 1000));
+        guestQrTimer.textContent = formatRemainingTime(remainingSeconds);
+        if (remainingSeconds <= 0) {
+            expireQrPage();
+        }
+    };
+
+    const checkQrStatus = async () => {
+        if (Date.now() >= qrPageExpiresAt) {
+            expireQrPage();
+            return;
+        }
+
+        try {
+            const response = await fetch(qrStatusUrl, {
+                headers: { "Accept": "application/json" },
+                cache: "no-store",
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (response.ok && payload.status === "verified") {
+                reloadVerifiedPage();
+            }
+        } catch (error) {
+            return;
+        }
+    };
+
+    updateQrCountdown();
+    qrCountdownTimer = window.setInterval(updateQrCountdown, 1000);
+    qrStatusTimer = window.setInterval(checkQrStatus, 3000);
+    </script>
+    {% endif %}
+</body>
+</html>

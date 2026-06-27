@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akses Staff</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="center">
+        <div class="card access-card">
+            <h3>Akses Staff</h3>
+
+            {% if error %}
+                <p class="danger-text">{{ error }}</p>
+            {% else %}
+                <p>Bagikan URL dan PIN ini kepada staff.</p>
+
+                <div class="generated-password">
+                    <label>
+                        <span>URL Login Staff</span>
+                        <div class="password-row">
+                            <input id="staffAccessUrl" type="text" value="{{ access_url }}" readonly>
+                            <button type="button" class="secondary-button copy-button" data-copy-target="staffAccessUrl">
+                                Copy
+                            </button>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="generated-password access-pin-box">
+                    <label>
+                        <span>PIN Verifikasi</span>
+                        <div class="password-row">
+                            <input id="staffAccessPin" type="text" value="{{ pin }}" readonly>
+                            <button type="button" class="secondary-button copy-button" data-copy-target="staffAccessPin">
+                                Copy
+                            </button>
+                        </div>
+                    </label>
+                </div>
+
+                <p class="hint" id="copyAccessHint">URL dan PIN aktif sampai staff logout, client logout staff, staff diblokir, atau idle 2 jam.</p>
+                <a class="button-link full-button" href="{{ access_url }}">Buka Login Staff</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+    const copyAccessHint = document.getElementById("copyAccessHint");
+    document.querySelectorAll("[data-copy-target]").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const input = document.getElementById(button.dataset.copyTarget);
+            if (!input) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(input.value);
+                copyAccessHint.textContent = "Berhasil di-copy.";
+            } catch (error) {
+                input.select();
+                document.execCommand("copy");
+                copyAccessHint.textContent = "Berhasil di-copy.";
+            }
+        });
+    });
+    </script>
+</body>
+</html>

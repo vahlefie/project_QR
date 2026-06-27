@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifikasi Kehadiran</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% set attendance_page_state = page_state|default('form') %}
+    <div class="center attendance-center">
+        <div class="card attendance-card">
+            <h2>Verifikasi Kehadiran</h2>
+
+            {% if owner_user and is_available %}
+                <p class="attendance-owner">{{ owner_user.perusahaan or owner_user.nama or owner_user.username }}</p>
+            {% endif %}
+
+            {% if is_available and attendance_page_state == 'form' %}
+                <form id="attendanceForm" class="attendance-form" data-verify-url="{{ verify_url }}">
+                    <label>
+                        <span>No HP</span>
+                        <div class="phone-input">
+                            <span>+62</span>
+                            <input
+                                id="attendancePhoneLocalInput"
+                                type="text"
+                                inputmode="numeric"
+                                minlength="8"
+                                pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                                title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                                autocomplete="tel-national"
+                                required
+                            >
+                            <input id="attendancePhoneFullInput" type="hidden" name="no_hp">
+                        </div>
+                    </label>
+                    <button type="submit" id="attendanceVerifyButton">Verifikasi</button>
+                </form>
+            {% elif not is_available %}
+                <div class="attendance-status-panel">
+                    <p class="danger-text attendance-result-message">{{ error_message }}</p>
+                    <button type="button" class="danger-button full-button" data-close-attendance-page>Tutup Halaman</button>
+                    <p class="hint is-hidden" data-close-hint>Jika halaman tidak tertutup otomatis, tutup tab ini dari browser.</p>
+                </div>
+            {% endif %}
+
+            <div
+                id="attendanceWaitingState"
+                class="attendance-status-panel {% if attendance_page_state != 'pending' %}is-hidden{% endif %}"
+                data-status-url="{{ status_url|default('') }}"
+                data-result-url="{{ result_url|default('') }}"
+            >
+                <div class="loading-spinner" aria-hidden="true"></div>
+                <p id="attendanceWaitingText" class="attendance-status-message">
+                    Harap Tunggu Sebentar, Data Sedang Diverifikasi
+                </p>
+            </div>
+
+            {% if is_available and attendance_page_state in ['confirmed', 'expired', 'message'] %}
+                <div id="attendanceFinalState" class="attendance-status-panel">
+                    <p
+                        id="attendanceFinalMessage"
+                        class="{% if attendance_page_state == 'expired' %}danger-text {% endif %}attendance-result-message"
+                    >{{ result_message }}</p>
+                    <button type="button" class="danger-button full-button" data-close-attendance-page>Tutup Halaman</button>
+                    <p class="hint is-hidden" data-close-hint>Jika halaman tidak tertutup otomatis, tutup tab ini dari browser.</p>
+                </div>
+            {% else %}
+                <div id="attendanceFinalState" class="attendance-status-panel is-hidden">
+                    <p id="attendanceFinalMessage" class="attendance-result-message"></p>
+                    <button type="button" class="danger-button full-button" data-close-attendance-page>Tutup Halaman</button>
+                    <p class="hint is-hidden" data-close-hint>Jika halaman tidak tertutup otomatis, tutup tab ini dari browser.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+    const closeWindowWithFallback = (hintElement) => {
+        window.open("", "_self");
+        window.close();
+        window.setTimeout(() => {
+            if (hintElement) {
+                hintElement.classList.remove("is-hidden");
+            }
+        }, 250);
+    };
+
+    document.querySelectorAll("[data-close-attendance-page]").forEach((button) => {
+        button.addEventListener("click", () => {
+            const hint = button.parentElement ? button.parentElement.querySelector("[data-close-hint]") : null;
+            closeWindowWithFallback(hint);
+        });
+    });
+
+    const attendanceForm = document.getElementById("attendanceForm");
+    const waitingState = document.getElementById("attendanceWaitingState");
+    const waitingText = document.getElementById("attendanceWaitingText");
+    const finalState = document.getElementById("attendanceFinalState");
+    const finalMessage = document.getElementById("attendanceFinalMessage");
+    let attendanceStatusTimer = null;
+
+    const stopAttendancePolling = () => {
+        if (attendanceStatusTimer) {
+            window.clearInterval(attendanceStatusTimer);
+            attendanceStatusTimer = null;
+        }
+    };
+
+    const showWaitingState = (statusUrl = "", resultUrl = "", message = "") => {
+        if (attendanceForm) {
+            attendanceForm.classList.add("is-hidden");
+        }
+        if (finalState) {
+            finalState.classList.add("is-hidden");
+        }
+        if (waitingState) {
+            waitingState.dataset.statusUrl = statusUrl;
+            waitingState.dataset.resultUrl = resultUrl;
+            waitingState.classList.remove("is-hidden");
+        }
+        if (waitingText && message) {
+            waitingText.textContent = message;
+        }
+    };
+
+    const showFinalState = (message, isDanger = false) => {
+        stopAttendancePolling();
+        if (attendanceForm) {
+            attendanceForm.classList.add("is-hidden");
+        }
+        if (waitingState) {
+            waitingState.classList.add("is-hidden");
+        }
+        if (finalMessage) {
+            finalMessage.textContent = message || "Data selesai diperiksa.";
+            finalMessage.classList.toggle("danger-text", isDanger);
+        }
+        if (finalState) {
+            finalState.classList.remove("is-hidden");
+            const closeButton = finalState.querySelector("[data-close-attendance-page]");
+            if (closeButton) {
+                closeButton.focus();
+            }
+        }
+    };
+
+    const handleAttendanceStatusPayload = (payload, responseOk = true) => {
+        if (!responseOk) {
+            showFinalState(payload.message || "Gagal Terhubung ke Server.", true);
+            return true;
+        }
+
+        if (payload.status === "pending") {
+            if (waitingText) {
+                waitingText.textContent = payload.message || "Harap Tunggu Sebentar, Data Sedang Diverifikasi";
+            }
+            return false;
+        }
+
+        if ((payload.status === "confirmed" || payload.status === "expired") && payload.result_url) {
+            stopAttendancePolling();
+            window.location.replace(payload.result_url);
+            return true;
+        }
+
+        showFinalState(payload.message || "Data selesai diperiksa.", payload.status === "expired");
+        return true;
+    };
+
+    const pollAttendanceStatus = async () => {
+        const statusUrl = waitingState ? waitingState.dataset.statusUrl : "";
+        if (!statusUrl) {
+            return;
+        }
+
+        try {
+            const response = await fetch(statusUrl, {
+                headers: { "Accept": "application/json" },
+                cache: "no-store",
+            });
+            const payload = await response.json().catch(() => ({}));
+            handleAttendanceStatusPayload(payload, response.ok);
+        } catch (error) {
+            if (waitingText) {
+                waitingText.textContent = "Koneksi internet tidak stabil, sistem masih mencoba memeriksa data.";
+            }
+        }
+    };
+
+    const startAttendancePolling = () => {
+        stopAttendancePolling();
+        pollAttendanceStatus();
+        attendanceStatusTimer = window.setInterval(pollAttendanceStatus, 3000);
+    };
+
+    if (waitingState && !waitingState.classList.contains("is-hidden") && waitingState.dataset.statusUrl) {
+        startAttendancePolling();
+    }
+
+    if (attendanceForm) {
+        const phoneLocalInput = document.getElementById("attendancePhoneLocalInput");
+        const phoneFullInput = document.getElementById("attendancePhoneFullInput");
+        const verifyButton = document.getElementById("attendanceVerifyButton");
+
+        const buildClientRequestId = () => {
+            const gmt7Time = new Date(Date.now() + (7 * 60 * 60 * 1000));
+            const timestamp = gmt7Time.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+            const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+            return `ATT-${timestamp}-${suffix}`;
+        };
+
+        const buildPhoneNumber = () => {
+            let localNumber = phoneLocalInput.value.trim();
+            if (localNumber.startsWith("62")) {
+                localNumber = localNumber.slice(2);
+            }
+            if (localNumber.startsWith("0")) {
+                localNumber = localNumber.slice(1);
+            }
+            return `62${localNumber}`;
+        };
+
+        attendanceForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!attendanceForm.reportValidity()) {
+                return;
+            }
+
+            const clientRequestId = buildClientRequestId();
+            const controller = new AbortController();
+            let isWaitingForStaff = false;
+            const unstableTimer = window.setTimeout(() => {
+                if (waitingText) {
+                    waitingText.textContent = "Koneksi internet tidak stabil, sistem masih mencoba memeriksa data.";
+                }
+            }, 4500);
+            const timeoutTimer = window.setTimeout(() => controller.abort(), 20000);
+
+            phoneFullInput.value = buildPhoneNumber();
+            verifyButton.disabled = true;
+            showWaitingState("", "", "Mohon tunggu, sistem sedang memeriksa data tamu.");
+
+            try {
+                const response = await fetch(attendanceForm.dataset.verifyUrl, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                        "X-Client-Request-ID": clientRequestId,
+                    },
+                    body: JSON.stringify({ no_hp: phoneFullInput.value }),
+                    signal: controller.signal,
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    showFinalState(
+                        payload.message || "Gagal Terhubung ke Server.",
+                        true,
+                    );
+                    return;
+                }
+
+                if (payload.status === "pending_confirmation" && payload.status_url) {
+                    isWaitingForStaff = true;
+                    showWaitingState(
+                        payload.status_url,
+                        payload.result_url || "",
+                        "Harap Tunggu Sebentar, Data Sedang Diverifikasi",
+                    );
+                    startAttendancePolling();
+                    return;
+                }
+
+                if (payload.status === "pending_retry") {
+                    showFinalState(payload.message || "Silahkan dicoba kembali setelah beberapa saat lagi");
+                    return;
+                }
+
+                showFinalState(
+                    payload.message || "Data selesai diperiksa.",
+                    payload.status === "server_error",
+                );
+            } catch (error) {
+                showFinalState("Gagal Terhubung ke Server.", true);
+            } finally {
+                window.clearTimeout(unstableTimer);
+                window.clearTimeout(timeoutTimer);
+                if (!isWaitingForStaff) {
+                    verifyButton.disabled = false;
+                }
+            }
+        });
+    }
+    </script>
+</body>
+</html>
