@@ -28,7 +28,7 @@ from sqlalchemy import func
 def parse_int(value, default=None):
     try:
         return int(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return default
 
 
@@ -133,7 +133,7 @@ def get_optional_integer(row, column_name):
 
     try:
         return int(float(value))
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -574,7 +574,7 @@ def load_pending_guest_upload():
     try:
         with pending_path.open("r", encoding="utf-8") as pending_file:
             return json.load(pending_file)
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return None
 
 
