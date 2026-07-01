@@ -5,6 +5,7 @@ from constants import (
     DEFAULT_SUPER_ADMIN_PASSWORD,
     DEMO_GUEST_EXCEL_FILENAME,
     DEMO_GUEST_EXCEL_PATH,
+    GUEST_STATUS_OPTIONS,
     ROLE_SUPER_ADMIN,
 )
 from extensions import db
@@ -12,6 +13,10 @@ from models import DemoGuest, EventArchive, User
 from openpyxl import load_workbook
 from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash
+
+FALLBACK_DEMO_GUEST_COUNT = 1000
+FALLBACK_DEMO_SOURCE = "generated_demo_seed"
+FALLBACK_DEMO_STAFF_NAMES = ("Staff A", "Staff B", "Staff C", "Staff D", "Staff E")
 
 CLEANUP_GUEST_STATUS_SQL = (
     "UPDATE guests SET status = :default_status " "WHERE status IS NULL OR status NOT IN ('Reguler', 'VIP')"
@@ -311,6 +316,30 @@ def load_demo_guest_rows_from_excel(excel_path=DEMO_GUEST_EXCEL_PATH):
         workbook.close()
 
 
+# Fungsi untuk membuat data demo dashboard saat file Excel dummy tidak tersedia.
+def build_fallback_demo_guest_rows(total_rows=FALLBACK_DEMO_GUEST_COUNT):
+    demo_guests = []
+    for number in range(1, total_rows + 1):
+        demo_guest = DemoGuest()
+        demo_guest.no = number
+        demo_guest.nama = f"Tamu Demo {number:04d}"
+        demo_guest.no_hp = f"6281200{number:06d}"
+        demo_guest.email = f"tamu.demo.{number:04d}@example.test"
+        demo_guest.status = GUEST_STATUS_OPTIONS[1] if number % 5 == 0 else DEFAULT_GUEST_STATUS
+        if number % 4 == 0:
+            demo_guest.kehadiran = ""
+            demo_guest.verifikasi = ""
+        else:
+            slot_index = (number - 1) % 24
+            hour = 8 + (slot_index // 2)
+            minute = 30 if slot_index % 2 else 0
+            demo_guest.kehadiran = f"{hour:02d}:{minute:02d}"
+            demo_guest.verifikasi = FALLBACK_DEMO_STAFF_NAMES[number % len(FALLBACK_DEMO_STAFF_NAMES)]
+        demo_guest.source_file = FALLBACK_DEMO_SOURCE
+        demo_guests.append(demo_guest)
+    return demo_guests
+
+
 # Fungsi untuk memastikan tabel data dummy dashboard tersedia dan terisi.
 def ensure_demo_guest_schema():
     inspector = inspect(db.engine)
@@ -322,6 +351,8 @@ def ensure_demo_guest_schema():
         return
 
     demo_guests = load_demo_guest_rows_from_excel()
+    if not demo_guests:
+        demo_guests = build_fallback_demo_guest_rows()
     if not demo_guests:
         return
 
