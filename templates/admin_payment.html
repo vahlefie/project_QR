@@ -51,7 +51,6 @@
                         <option value="Cash">Cash</option>
                         <option value="QRIS">QRIS</option>
                         <option value="Virtual Account">Virtual Account</option>
-                        <option value="Lainnya">Lainnya</option>
                     </select>
                 </label>
 
@@ -59,7 +58,7 @@
                     <span>Bank Asal</span>
                     <select name="origin_bank" id="originBankInput" required>
                         <option value="">Pilih bank</option>
-                        <option value="N/A">N/A</option>
+                        <option value="N/A" data-na-option>N/A</option>
                         {% for bank in bank_options %}
                             <option value="{{ bank }}">{{ bank }}</option>
                         {% endfor %}
@@ -101,12 +100,19 @@
 
                 <label>
                     <span>Periode Mulai *</span>
-                    <input type="date" name="period_start" required>
+                    <input type="date" name="period_start" id="periodStartInput" required>
                 </label>
 
                 <label>
                     <span>Periode Akhir *</span>
-                    <input type="date" name="period_end" min="{{ min_period_end_date }}" required>
+                    <input
+                        type="date"
+                        name="period_end"
+                        id="periodEndInput"
+                        min="{{ min_period_end_date }}"
+                        data-base-min="{{ min_period_end_date }}"
+                        required
+                    >
                 </label>
 
                 <label>
@@ -200,23 +206,56 @@
     const paymentMethodSelect = document.querySelector("select[name='payment_method']");
     const originBankInput = document.getElementById("originBankInput");
     const accountNumberInput = document.getElementById("accountNumberInput");
+    const originBankNaOption = originBankInput ? originBankInput.querySelector("[data-na-option]") : null;
+    const periodStartInput = document.getElementById("periodStartInput");
+    const periodEndInput = document.getElementById("periodEndInput");
 
     function syncTransferFields() {
         const isTransfer = paymentMethodSelect.value === "Transfer";
-        [originBankInput, accountNumberInput].forEach((input) => {
-            input.disabled = !isTransfer;
-            input.required = isTransfer;
-            if (!isTransfer) {
-                input.value = "N/A";
-            } else if (input.value === "N/A") {
-                input.value = "";
+        if (originBankNaOption) {
+            originBankNaOption.hidden = isTransfer;
+            originBankNaOption.disabled = isTransfer;
+        }
+
+        originBankInput.disabled = !isTransfer;
+        originBankInput.required = isTransfer;
+        originBankInput.classList.toggle("na-display-field", !isTransfer);
+        accountNumberInput.disabled = !isTransfer;
+        accountNumberInput.required = isTransfer;
+        accountNumberInput.classList.toggle("na-display-field", !isTransfer);
+
+        if (!isTransfer) {
+            originBankInput.value = "N/A";
+            accountNumberInput.value = "N/A";
+        } else {
+            if (originBankInput.value === "N/A") {
+                originBankInput.value = "";
             }
-        });
+            if (accountNumberInput.value === "N/A") {
+                accountNumberInput.value = "";
+            }
+        }
+    }
+
+    function syncPeriodEndMin() {
+        const baseMin = periodEndInput.dataset.baseMin || periodEndInput.min;
+        const selectedStart = periodStartInput.value;
+        const nextMin = selectedStart && selectedStart > baseMin ? selectedStart : baseMin;
+        periodEndInput.min = nextMin;
+
+        if (periodEndInput.value && periodEndInput.value < nextMin) {
+            periodEndInput.value = nextMin;
+        }
     }
 
     if (paymentMethodSelect && originBankInput && accountNumberInput) {
         paymentMethodSelect.addEventListener("change", syncTransferFields);
         syncTransferFields();
+    }
+
+    if (periodStartInput && periodEndInput) {
+        periodStartInput.addEventListener("change", syncPeriodEndMin);
+        syncPeriodEndMin();
     }
 </script>
 {% endblock %}

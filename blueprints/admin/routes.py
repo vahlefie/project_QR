@@ -139,9 +139,9 @@ def create_admin_blueprint(deps):
                 owner_user_id=owner_user_id,
             )
 
-        if period_start and period_end <= period_start:
+        if period_start and period_end < period_start:
             return build_payment_redirect(
-                error="Periode Akhir harus lebih dari Periode Mulai.",
+                error="Periode Akhir tidak boleh lebih awal dari Periode Mulai.",
                 owner_user_id=owner_user_id,
             )
 
@@ -149,13 +149,13 @@ def create_admin_blueprint(deps):
             return build_payment_redirect(error="Event wajib diisi.", owner_user_id=owner_user_id)
 
         payment_method = deps.get_form_text("payment_method") or "Transfer"
-        if payment_method not in {"Transfer", "Cash", "QRIS", "Virtual Account", "Lainnya"}:
+        if payment_method not in {"Transfer", "Cash", "QRIS", "Virtual Account"}:
             return build_payment_redirect(error="Metode payment tidak valid.", owner_user_id=owner_user_id)
 
         origin_bank = deps.get_form_text("origin_bank")
         account_number = deps.get_form_text("account_number")
         if payment_method == "Transfer":
-            if not origin_bank or not account_number:
+            if not origin_bank or origin_bank == "N/A" or not account_number or account_number == "N/A":
                 return build_payment_redirect(
                     error="Bank Asal dan Nomor Rekening wajib diisi untuk metode Transfer.",
                     owner_user_id=owner_user_id,
