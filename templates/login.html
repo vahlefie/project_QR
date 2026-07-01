@@ -25,6 +25,28 @@
             </form>
         </div>
     </div>
+    {% if login_error_message %}
+        <div class="confirm-modal" id="loginErrorModal" aria-hidden="false">
+            <div class="confirm-dialog login-error-dialog" role="dialog" aria-modal="true" aria-labelledby="loginErrorTitle">
+                <h4 id="loginErrorTitle">Login Gagal</h4>
+                <p class="modal-message login-error-message">{{ login_error_message }}</p>
+                <div class="confirm-actions single-action">
+                    <button type="button" class="danger-button" id="closeLoginErrorButton">Tutup</button>
+                </div>
+            </div>
+        </div>
+    {% endif %}
     <script src="{{ url_for('static', filename='password_toggle.js') }}"></script>
+    <script>
+        const loginErrorModal = document.getElementById("loginErrorModal");
+        const closeLoginErrorButton = document.getElementById("closeLoginErrorButton");
+
+        if (loginErrorModal && closeLoginErrorButton) {
+            closeLoginErrorButton.addEventListener("click", () => {
+                loginErrorModal.classList.add("is-hidden");
+                loginErrorModal.setAttribute("aria-hidden", "true");
+            });
+        }
+    </script>
 </body>
 </html>

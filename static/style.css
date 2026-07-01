@@ -1366,6 +1366,16 @@ p {
     text-align: center;
 }
 
+.login-error-dialog h4 {
+    color: var(--danger);
+}
+
+.login-error-message {
+    margin-bottom: 18px;
+    color: var(--text);
+    white-space: pre-line;
+}
+
 .generated-password {
     padding: 14px;
     border: 1px solid var(--line);

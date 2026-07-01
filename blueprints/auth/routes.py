@@ -113,9 +113,14 @@ def create_auth_blueprint(deps):
                     f"Terlalu banyak percobaan login gagal. Coba lagi dalam {remaining_seconds // 60 + 1} menit.",
                     429,
                 )
-            return "Login gagal ❌"
+            login_error_message = (
+                "Password salah!\nHarap hubungi petugas untuk informasi lebih lanjut."
+                if user
+                else "Email/No HP tidak ditemukan!\nHarap hubungi petugas untuk informasi lebih lanjut."
+            )
+            return render_template("login.html", login_error_message=login_error_message)
 
-        return render_template("login.html")
+        return render_template("login.html", login_error_message=None)
 
     # Fungsi untuk menangani pembuatan password baru oleh akun yang sedang login.
     @auth_bp.route("/reset-password", methods=["GET", "POST"])
