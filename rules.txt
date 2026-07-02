@@ -1,0 +1,10 @@
+- gunakan clean code
+- pisahkan logic dan route
+- gunakan function modular
+- hindari hardcode
+- sesuaikan tampilan UI dengan tema yang telah diterapkan sebelumnya
+- jelaskan kegunaaan atau peruntukan fungsi dengan tagar komentar "#" diatas baris setiap fungsi
+- selalu test hasil coding dengan menyeluruh, termasuk dari sisi browser pengguna
+- update context.md setiap kali mengedit fitur, format, atau spesifikasi project
+- jangan pindahkan context.md dan rules.txt ke archieve karena keduanya adalah dokumentasi aktif project
+- dokumentasikan perubahan deploy, environment production, service systemd, nginx, ssl, cron, dan job otomatis di context.md
