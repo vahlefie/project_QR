@@ -129,8 +129,7 @@
                                         id="attendance-qr-link-{{ account.id }}"
                                         class="button-link attendance-url-qr-button {% if not attendance_qr_url %}is-disabled{% endif %}"
                                         {% if attendance_qr_url %}href="{{ attendance_qr_url }}"{% endif %}
-                                        target="_blank"
-                                        rel="noopener"
+                                        download
                                         aria-disabled="{{ 'false' if attendance_qr_url else 'true' }}"
                                     >
                                         QR Client
@@ -626,10 +625,12 @@
             qrLink.href = attendanceQrUrl;
             qrLink.classList.remove("is-disabled");
             qrLink.setAttribute("aria-disabled", "false");
+            qrLink.setAttribute("download", "");
         } else {
             qrLink.removeAttribute("href");
             qrLink.classList.add("is-disabled");
             qrLink.setAttribute("aria-disabled", "true");
+            qrLink.removeAttribute("download");
         }
     }
 

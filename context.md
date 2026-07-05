@@ -47,7 +47,7 @@ Standar dokumentasi kode: setiap fungsi Python diberi komentar `#` tepat di atas
 - `services/staff_service.py`: service token akses staff, PIN, cookie session staff, idle timeout, revoke/block/unblock akses, current staff dari cookie, logging aktivitas staff, context halaman staff, status staff, validasi form staff, dan parser log staff.
 - `services/whatsapp_service.py`: service konfigurasi WhatsApp, template pesan WhatsApp, short URL QR tamu, masking token API, dan helper URL pendek `/q/<short_code>`.
 - `blueprints/auth/routes.py`: Blueprint autentikasi untuk route `/`, `/login`, `/reset-password`, `/password/new`, dan `/logout`.
-- `blueprints/attendance/routes.py`: Blueprint verifikasi kehadiran publik untuk route `/kehadiran/<attendance_token>`, `/kehadiran/<attendance_token>/qr.svg`, `/kehadiran/<attendance_token>/verify`, `/kehadiran/<attendance_token>/request/<request_id>/status`, `/kehadiran/<attendance_token>/request/<request_id>/result`, `/q/<short_code>`, `/qr/<guest_token>`, `/qr/<guest_token>/image.svg`, dan `/qr/<guest_token>/status`.
+- `blueprints/attendance/routes.py`: Blueprint verifikasi kehadiran publik untuk route `/kehadiran/<attendance_token>`, `/kehadiran/<attendance_token>/qr.png`, `/kehadiran/<attendance_token>/qr.svg` sebagai redirect kompatibilitas, `/kehadiran/<attendance_token>/verify`, `/kehadiran/<attendance_token>/request/<request_id>/status`, `/kehadiran/<attendance_token>/request/<request_id>/result`, `/q/<short_code>`, `/qr/<guest_token>`, `/qr/<guest_token>/image.svg`, dan `/qr/<guest_token>/status`.
 - `blueprints/dashboard/routes.py`: Blueprint dashboard dan profile untuk route `/admin/dashboard`, `/super-admin/dashboard`, `/user/dashboard`, dan `/profile`.
 - `blueprints/client_staff/routes.py`: Blueprint pengelolaan staff dari sisi client untuk route `/user/staff...`.
 - `blueprints/staff/routes.py`: Blueprint session staff, dashboard staff, dan pengelolaan data tamu staff untuk route `/staff...`.
@@ -307,7 +307,8 @@ Cleaning dijalankan setelah klik upload file dan sebelum data disimpan.
 
 Route utama:
 - `GET /kehadiran/<attendance_token>`
-- `GET /kehadiran/<attendance_token>/qr.svg`
+- `GET /kehadiran/<attendance_token>/qr.png`
+- `GET /kehadiran/<attendance_token>/qr.svg` redirect ke PNG
 - `POST /kehadiran/<attendance_token>/verify`
 - `GET /kehadiran/<attendance_token>/request/<request_id>/status`
 - `GET /kehadiran/<attendance_token>/request/<request_id>/result`
@@ -317,7 +318,7 @@ Perilaku:
 - `attendance_token_nonce` hanya dibuat/diperbarui oleh admin atau super admin dari halaman Manage Client.
 - Saat URL digenerate ulang, nonce lama diganti sehingga URL publik lama otomatis tidak valid.
 - Link publik tersedia dari kartu `Verifikasi Kehadiran` di dashboard client jika admin sudah membuat URL. Jika belum, dashboard menampilkan status URL belum dibuat.
-- Tombol `QR Client` pada dashboard client membuka gambar QR SVG yang berisi URL halaman verifikasi `/kehadiran/<attendance_token>`. Jika discan device tamu, halaman verifikasi langsung terbuka di device tamu.
+- Tombol `QR Client` pada dashboard client mengunduh QR PNG resolusi sekitar 2400 px yang berisi URL halaman verifikasi `/kehadiran/<attendance_token>`. Jika discan device tamu, halaman verifikasi langsung terbuka di device tamu.
 - Halaman publik menampilkan UI input nomor HP dengan prefix visual `+62`.
 - Kolom input setelah prefix menerima angka minimal 8 digit yang diawali `08` atau `8`; frontend mengirim hidden value canonical `62...`.
 - Jika nomor ditemukan dan `kehadiran` masih kosong, backend membuat `AttendanceVerificationRequest` status `pending`; halaman tamu berubah menjadi status tunggu `Harap Tunggu Sebentar, Data Sedang Diverifikasi` dengan spinner dan polling status tiap 3 detik.
@@ -406,7 +407,7 @@ Route utama:
 Halaman `/users` admin dan super admin memiliki kolom paling kanan `URL Client`:
 - Setiap baris client menampilkan tombol `Generate` warna abu-abu dengan dimensi tombol default halaman Manage Client.
 - Di sebelah kanan tombol `Generate`, setiap client aktif juga menampilkan tombol biru `QR Client`.
-- Tombol `QR Client` membuka gambar QR SVG dari `/kehadiran/<attendance_token>/qr.svg` pada tab baru. Isi QR adalah URL halaman verifikasi kehadiran client, bukan token mentah.
+- Tombol `QR Client` mengunduh QR PNG dari `/kehadiran/<attendance_token>/qr.png`. Isi QR adalah URL halaman verifikasi kehadiran client, bukan token mentah.
 - Jika URL Client belum pernah digenerate, tombol `QR Client` tampil disabled sampai `Generate` berhasil.
 - Jika URL belum pernah dibuat, klik `Generate` langsung membuat URL dan menampilkan popup notifikasi `URL publik sudah dibuat.`.
 - Jika URL sudah pernah dibuat, klik `Generate` membuka popup peringatan `Terakhir generate pada (tanggal terakhir generate).` lalu baris baru `Apakah akan membuat ulang URL?`.
@@ -1065,8 +1066,9 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Fix syntax Python production di `services/guest_service.py`: semua multiple exception sekarang memakai `except (A, B):`; commit deploy `6e4e7b2`.
 - Fallback data demo dashboard client ditambahkan di `services/schema_service.py` agar mode Demo tetap tampil di VPS tanpa file Excel lokal; commit deploy `9d85101`.
 - Audit dokumentasi 2026-07-02: `context.md` dan `rules.txt` direstore dari `archieve/project_notes/`, section Deploy VPS dan Job Otomatis ditambahkan, dan aturan dokumen aktif diperjelas.
-- Audit dokumentasi 2026-07-05: `context.md` diperbarui untuk mencatat tombol `QR Client`, route `/kehadiran/<attendance_token>/qr.svg`, alur verifikasi tamu berbasis pending konfirmasi staff tanpa popup tamu, pesan timeout/tolak terbaru, penghapusan `Request ID`/`Kode pemeriksaan` dari UI tamu, dan perubahan pesan halaman session staff.
-- Verifikasi implementasi terbaru sebelum audit dokumentasi: `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 103 test.
+- Audit dokumentasi 2026-07-05: `context.md` diperbarui untuk mencatat tombol `QR Client`, route `/kehadiran/<attendance_token>/qr.png`, alur verifikasi tamu berbasis pending konfirmasi staff tanpa popup tamu, pesan timeout/tolak terbaru, penghapusan `Request ID`/`Kode pemeriksaan` dari UI tamu, dan perubahan pesan halaman session staff.
+- Update QR Client 2026-07-05: tombol `QR Client` sekarang mengunduh file PNG siap cetak berukuran sekitar 2400 px, dengan route lama `/kehadiran/<attendance_token>/qr.svg` dialihkan ke `/kehadiran/<attendance_token>/qr.png`.
+- Verifikasi QR Client PNG: `.venv\Scripts\python.exe -m py_compile app.py constants.py services\attendance_service.py blueprints\attendance\routes.py blueprints\registry.py`, `.venv\Scripts\python.exe -m unittest tests.test_attendance_service`, `.venv\Scripts\python.exe -m unittest tests.test_attendance tests.test_admin_routes`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 104 test.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.

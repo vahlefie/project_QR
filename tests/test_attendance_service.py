@@ -51,6 +51,17 @@ class AttendanceServiceTest(unittest.TestCase):
 
         self.assertEqual(token, "")
 
+    # Fungsi untuk memastikan QR Client PNG memakai format gambar besar yang siap cetak.
+    def test_build_guest_attendance_qr_png_creates_large_png(self):
+        png_data = attendance_service.build_guest_attendance_qr_png("https://example.com/kehadiran/token-test")
+
+        self.assertEqual(png_data[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(png_data[12:16], b"IHDR")
+        width = int.from_bytes(png_data[16:20], "big")
+        height = int.from_bytes(png_data[20:24], "big")
+        self.assertEqual(width, height)
+        self.assertGreaterEqual(width, 2200)
+
     # Fungsi untuk memastikan token lama invalid setelah nonce client diperbarui.
     def test_get_attendance_owner_from_token_rejects_old_nonce(self):
         with app_module.app.app_context():

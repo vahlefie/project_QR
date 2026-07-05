@@ -444,7 +444,7 @@ class AdminRouteTest(unittest.TestCase):
         self.assertEqual(payload["message"], "URL publik sudah dibuat.")
         self.assertIn("/kehadiran/", payload["attendance_url"])
         self.assertIn("/kehadiran/", payload["attendance_qr_url"])
-        self.assertIn("/qr.svg", payload["attendance_qr_url"])
+        self.assertIn("/qr.png", payload["attendance_qr_url"])
 
         with app_module.app.app_context():
             client = app_module.db.session.get(User, client_id)

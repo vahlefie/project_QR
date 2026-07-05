@@ -94,6 +94,7 @@ class AttendanceRouteTest(unittest.TestCase):
 
         self.assertIn("attendance.guest_attendance_landing", endpoints)
         self.assertIn("attendance.guest_attendance_qr_image", endpoints)
+        self.assertIn("attendance.guest_attendance_qr_download", endpoints)
         self.assertIn("attendance.verify_guest_attendance_route", endpoints)
         self.assertIn("attendance.guest_attendance_request_status", endpoints)
         self.assertIn("attendance.guest_attendance_request_result", endpoints)
@@ -113,28 +114,33 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertEqual(response.json["status"], "invalid_link")
         self.assertEqual(response.json["client_request_id"], "test-client-request")
 
-    # Fungsi untuk memastikan QR Client berisi URL halaman verifikasi kehadiran.
-    def test_attendance_client_qr_image_contains_attendance_landing_url(self):
-        _, _, attendance_token = self.create_active_attendance_owner("attendance_qr_client", 628120040004)
+    # Fungsi untuk memastikan download QR Client PNG berisi URL halaman verifikasi kehadiran.
+    def test_attendance_client_qr_download_contains_attendance_landing_url(self):
+        owner_id, _, attendance_token = self.create_active_attendance_owner("attendance_qr_client", 628120040004)
         captured = {}
-        original_build_guest_qr_svg = app_module.attendance_service.build_guest_qr_svg
+        original_build_guest_attendance_qr_png = app_module.attendance_service.build_guest_attendance_qr_png
         try:
 
             # Fungsi test helper untuk menangkap nilai yang dimasukkan ke QR.
-            def fake_build_guest_qr_svg(qr_value):
+            def fake_build_guest_attendance_qr_png(qr_value):
                 captured["value"] = qr_value
-                return b"<svg></svg>"
+                return b"\x89PNG\r\n\x1a\nfake-png"
 
-            app_module.attendance_service.build_guest_qr_svg = fake_build_guest_qr_svg
-            response = self.client.get(f"/kehadiran/{attendance_token}/qr.svg")
+            app_module.attendance_service.build_guest_attendance_qr_png = fake_build_guest_attendance_qr_png
+            response = self.client.get(f"/kehadiran/{attendance_token}/qr.png")
         finally:
-            app_module.attendance_service.build_guest_qr_svg = original_build_guest_qr_svg
+            app_module.attendance_service.build_guest_attendance_qr_png = original_build_guest_attendance_qr_png
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.mimetype, "image/svg+xml")
-        self.assertIn("<svg", response.get_data(as_text=True))
+        self.assertEqual(response.mimetype, "image/png")
+        self.assertEqual(response.get_data()[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(response.headers["Content-Disposition"], f'attachment; filename="qr-client-{owner_id}.png"')
         self.assertIn(f"/kehadiran/{attendance_token}", captured["value"])
-        self.assertNotIn("/qr.svg", captured["value"])
+        self.assertNotIn("/qr.png", captured["value"])
+
+        legacy_response = self.client.get(f"/kehadiran/{attendance_token}/qr.svg")
+        self.assertEqual(legacy_response.status_code, 302)
+        self.assertIn(f"/kehadiran/{attendance_token}/qr.png", legacy_response.headers["Location"])
 
     # Fungsi untuk memastikan halaman tamu menunggu staff lalu memuat hasil sukses.
     def test_attendance_guest_waits_for_staff_confirmation_result_page(self):

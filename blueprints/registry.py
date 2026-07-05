@@ -42,6 +42,7 @@ AUTH_DEPS = (
 )
 
 ATTENDANCE_DEPS = (
+    "build_guest_attendance_qr_png",
     "build_guest_qr_token",
     "build_guest_qr_svg",
     "build_guest_qr_scan_value",

@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 from io import BytesIO
 import secrets
+import struct
 from urllib.parse import unquote, urlparse
+import zlib
 
 import qrcode
 from qrcode.image.svg import SvgPathImage
@@ -10,6 +12,7 @@ from constants import (
     ATTENDANCE_MONTH_ABBREVIATIONS,
     ATTENDANCE_TOKEN_NONCE_BYTES,
     ATTENDANCE_TOKEN_SALT,
+    GUEST_ATTENDANCE_QR_PRINT_SIZE_PX,
     GUEST_QR_TOKEN_SALT,
     PACKAGE_PREMIUM,
     ROLE_USER,
@@ -116,7 +119,7 @@ def build_guest_attendance_qr_url(owner_user):
     if not attendance_token:
         return ""
     return url_for(
-        "attendance.guest_attendance_qr_image",
+        "attendance.guest_attendance_qr_download",
         attendance_token=attendance_token,
         _external=True,
     )
@@ -229,6 +232,53 @@ def build_guest_qr_svg(qr_value):
     output = BytesIO()
     qr_image.save(output)
     return output.getvalue()
+
+
+# Fungsi untuk membuat chunk PNG.
+def build_png_chunk(chunk_type, chunk_data):
+    return (
+        struct.pack(">I", len(chunk_data))
+        + chunk_type
+        + chunk_data
+        + struct.pack(">I", zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF)
+    )
+
+
+# Fungsi untuk merender matrix QR menjadi PNG RGB tanpa dependency image eksternal.
+def build_qr_matrix_png(matrix, target_pixel_size):
+    module_count = len(matrix)
+    scale = max(1, target_pixel_size // module_count)
+    image_size = module_count * scale
+    black_pixel = b"\x00\x00\x00"
+    white_pixel = b"\xff\xff\xff"
+    raw_rows = bytearray()
+
+    for matrix_row in matrix:
+        row_pixels = b"".join((black_pixel if cell else white_pixel) * scale for cell in matrix_row)
+        png_row = b"\x00" + row_pixels
+        for _ in range(scale):
+            raw_rows.extend(png_row)
+
+    png_signature = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", image_size, image_size, 8, 2, 0, 0, 0)
+    idat_data = zlib.compress(bytes(raw_rows), 9)
+    return (
+        png_signature
+        + build_png_chunk(b"IHDR", ihdr_data)
+        + build_png_chunk(b"IDAT", idat_data)
+        + build_png_chunk(b"IEND", b"")
+    )
+
+
+# Fungsi untuk membuat PNG QR halaman verifikasi kehadiran client dengan resolusi siap cetak.
+def build_guest_attendance_qr_png(qr_value):
+    qr_code = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_Q,
+        border=4,
+    )
+    qr_code.add_data(qr_value)
+    qr_code.make(fit=True)
+    return build_qr_matrix_png(qr_code.get_matrix(), GUEST_ATTENDANCE_QR_PRINT_SIZE_PX)
 
 
 # Fungsi untuk mengurai nilai scan QR tamu.

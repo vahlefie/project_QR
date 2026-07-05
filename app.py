@@ -585,6 +585,11 @@ def build_guest_qr_svg(qr_value):
     return attendance_service.build_guest_qr_svg(qr_value)
 
 
+# Fungsi untuk membuat PNG QR halaman verifikasi kehadiran client.
+def build_guest_attendance_qr_png(qr_value):
+    return attendance_service.build_guest_attendance_qr_png(qr_value)
+
+
 # Fungsi untuk membuat pesan QR yang sudah terverifikasi.
 def build_qr_already_verified_message():
     return attendance_service.build_qr_already_verified_message()
@@ -1170,6 +1175,7 @@ def build_blueprint_dependencies():
         build_final_guest_export_filename=build_final_guest_export_filename,
         build_guest_attendance_qr_url=build_guest_attendance_qr_url,
         build_guest_attendance_url=build_guest_attendance_url,
+        build_guest_attendance_qr_png=build_guest_attendance_qr_png,
         build_guest_qr_svg=build_guest_qr_svg,
         build_guest_qr_token=build_guest_qr_token,
         build_guest_qr_scan_value=build_guest_qr_scan_value,

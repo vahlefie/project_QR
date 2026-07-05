@@ -169,7 +169,6 @@ p {
 }
 
 .dashboard-attendance-qr {
-    width: 100%;
     justify-self: start;
 }
 
@@ -2277,8 +2276,8 @@ tbody tr:hover {
     }
 
     .dashboard-attendance-open-row {
-        grid-template-columns: minmax(0, 1fr) 82px;
-        gap: 8px;
+        grid-template-columns: minmax(0, 1fr) 50%;
+        gap: 5px;
     }
 
     .dashboard-attendance-qr {
