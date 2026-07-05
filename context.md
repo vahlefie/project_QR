@@ -47,7 +47,7 @@ Standar dokumentasi kode: setiap fungsi Python diberi komentar `#` tepat di atas
 - `services/staff_service.py`: service token akses staff, PIN, cookie session staff, idle timeout, revoke/block/unblock akses, current staff dari cookie, logging aktivitas staff, context halaman staff, status staff, validasi form staff, dan parser log staff.
 - `services/whatsapp_service.py`: service konfigurasi WhatsApp, template pesan WhatsApp, short URL QR tamu, masking token API, dan helper URL pendek `/q/<short_code>`.
 - `blueprints/auth/routes.py`: Blueprint autentikasi untuk route `/`, `/login`, `/reset-password`, `/password/new`, dan `/logout`.
-- `blueprints/attendance/routes.py`: Blueprint verifikasi kehadiran publik untuk route `/kehadiran/<attendance_token>`, `/kehadiran/<attendance_token>/verify`, `/q/<short_code>`, `/qr/<guest_token>`, `/qr/<guest_token>/image.svg`, dan `/qr/<guest_token>/status`.
+- `blueprints/attendance/routes.py`: Blueprint verifikasi kehadiran publik untuk route `/kehadiran/<attendance_token>`, `/kehadiran/<attendance_token>/qr.svg`, `/kehadiran/<attendance_token>/verify`, `/kehadiran/<attendance_token>/request/<request_id>/status`, `/kehadiran/<attendance_token>/request/<request_id>/result`, `/q/<short_code>`, `/qr/<guest_token>`, `/qr/<guest_token>/image.svg`, dan `/qr/<guest_token>/status`.
 - `blueprints/dashboard/routes.py`: Blueprint dashboard dan profile untuk route `/admin/dashboard`, `/super-admin/dashboard`, `/user/dashboard`, dan `/profile`.
 - `blueprints/client_staff/routes.py`: Blueprint pengelolaan staff dari sisi client untuk route `/user/staff...`.
 - `blueprints/staff/routes.py`: Blueprint session staff, dashboard staff, dan pengelolaan data tamu staff untuk route `/staff...`.
@@ -307,26 +307,35 @@ Cleaning dijalankan setelah klik upload file dan sebelum data disimpan.
 
 Route utama:
 - `GET /kehadiran/<attendance_token>`
+- `GET /kehadiran/<attendance_token>/qr.svg`
 - `POST /kehadiran/<attendance_token>/verify`
+- `GET /kehadiran/<attendance_token>/request/<request_id>/status`
+- `GET /kehadiran/<attendance_token>/request/<request_id>/result`
 
 Perilaku:
 - Link verifikasi memakai token bertanda tangan berdasarkan `User.id` client dan `attendance_token_nonce`, sehingga pencarian nomor HP tamu dibatasi ke data milik client tersebut.
 - `attendance_token_nonce` hanya dibuat/diperbarui oleh admin atau super admin dari halaman Manage Client.
 - Saat URL digenerate ulang, nonce lama diganti sehingga URL publik lama otomatis tidak valid.
 - Link publik tersedia dari kartu `Verifikasi Kehadiran` di dashboard client jika admin sudah membuat URL. Jika belum, dashboard menampilkan status URL belum dibuat.
+- Tombol `QR Client` pada dashboard client membuka gambar QR SVG yang berisi URL halaman verifikasi `/kehadiran/<attendance_token>`. Jika discan device tamu, halaman verifikasi langsung terbuka di device tamu.
 - Halaman publik menampilkan UI input nomor HP dengan prefix visual `+62`.
 - Kolom input setelah prefix menerima angka minimal 8 digit yang diawali `08` atau `8`; frontend mengirim hidden value canonical `62...`.
-- Jika nomor ditemukan dan `kehadiran` masih kosong, backend mengisi `Guests.kehadiran` dengan waktu saat itu dan popup menampilkan `Selamat Datang Bpk/Ibu (nama tamu)`.
-- Jika nomor tidak ditemukan, popup menampilkan `Nomor (nomor yang diinput) Tidak Terdaftar.` lalu baris baru `Harap Hubungi Staff Reservasi`.
-- Jika nomor ditemukan tetapi `kehadiran` sudah terisi, popup menampilkan `Nomor (nomor yang diinput) Sudah Terverifikasi.` lalu baris baru `Harap Hubungi Staff Reservasi`.
-- Semua popup hasil memiliki tombol merah `Tutup Halaman`. Jika browser menolak `window.close()`, halaman menampilkan hint untuk menutup tab secara manual.
-- Saat request berjalan, halaman menampilkan modal loading dengan spinner. Jika request berjalan lama, teks loading berubah menjadi status koneksi tidak stabil.
-- Jika server mengembalikan error atau link tidak valid, halaman menampilkan tampilan `Gagal Terhubung ke Server` atau pesan link invalid disertai `Request ID` dan `Kode pemeriksaan`.
+- Jika nomor ditemukan dan `kehadiran` masih kosong, backend membuat `AttendanceVerificationRequest` status `pending`; halaman tamu berubah menjadi status tunggu `Harap Tunggu Sebentar, Data Sedang Diverifikasi` dengan spinner dan polling status tiap 3 detik.
+- Popup verifikasi kehadiran hanya muncul di sisi staff. Staff dapat klik `Konfirmasi` untuk mengisi `Guests.kehadiran` dan `verified_by_staff_name`, atau klik `Tolak/Tutup` untuk menutup request bagi staff tersebut.
+- Jika staff klik `Konfirmasi`, halaman tamu otomatis redirect ke halaman hasil dan menampilkan `Selamat Datang Bpk/Ibu (nama tamu)`.
+- Jika request habis karena timeout 1 menit tanpa konfirmasi, halaman tamu menampilkan `Waktu Habis, Nomor Tidak Berhasil Diverifikasi`.
+- Jika semua staff aktif klik `Tolak/Tutup`, halaman tamu menampilkan `Nomor Tidak Berhasil Diverifikasi, Harap Hubungi Staff`.
+- Jika tamu mencoba verifikasi kembali saat request masih pending, halaman menampilkan `Silahkan dicoba kembali setelah beberapa saat lagi`.
+- Jika nomor tidak ditemukan, request notifikasi staff status `not_registered` dibuat dan halaman tamu menampilkan pesan nomor tidak terdaftar setelah proses selesai.
+- Jika nomor ditemukan tetapi `kehadiran` sudah terisi, request notifikasi staff status `already_verified` dibuat dan halaman tamu menampilkan pesan sudah terverifikasi setelah proses selesai.
+- Tombol merah `Tutup Halaman` tetap tersedia pada halaman hasil. Jika browser menolak `window.close()`, halaman menampilkan hint untuk menutup tab secara manual.
+- Saat request awal berjalan atau koneksi tidak stabil, halaman menampilkan spinner loading dan teks koneksi tidak stabil jika response belum diterima.
+- Jika server mengembalikan error atau link tidak valid, halaman menampilkan pesan error tanpa menampilkan `Request ID` dan `Kode pemeriksaan` pada UI tamu.
 
 Logging:
-- Event verifikasi ditulis ke kategori log `ATTENDANCE` dengan event `GUEST_ATTENDANCE_VERIFIED`, `GUEST_ATTENDANCE_NOT_FOUND`, `GUEST_ATTENDANCE_ALREADY_VERIFIED`, `GUEST_ATTENDANCE_INVALID_LINK`, atau `GUEST_ATTENDANCE_SERVER_ERROR`.
+- Event verifikasi ditulis ke kategori log `ATTENDANCE` dengan event `GUEST_ATTENDANCE_PENDING_STAFF_CONFIRMATION`, `GUEST_ATTENDANCE_CONFIRMED_BY_STAFF`, `GUEST_ATTENDANCE_NOT_FOUND`, `GUEST_ATTENDANCE_ALREADY_VERIFIED`, `GUEST_ATTENDANCE_INVALID_LINK`, atau `GUEST_ATTENDANCE_SERVER_ERROR`.
 - Access log menyimpan header `X-Client-Request-ID` pada field `client_request_id`.
-- Kode pada popup error dapat dicari pada file `logs/activity_YYYY-MM-DD.log` melalui `Request ID` atau `client_request_id`.
+- Pemeriksaan log tetap bisa dilakukan dari file `logs/activity_YYYY-MM-DD.log` menggunakan access log, `request_id`, atau `client_request_id` yang tersimpan di log server.
 
 ## QR Code Kehadiran Tamu Premium
 
@@ -396,10 +405,14 @@ Route utama:
 
 Halaman `/users` admin dan super admin memiliki kolom paling kanan `URL Client`:
 - Setiap baris client menampilkan tombol `Generate` warna abu-abu dengan dimensi tombol default halaman Manage Client.
+- Di sebelah kanan tombol `Generate`, setiap client aktif juga menampilkan tombol biru `QR Client`.
+- Tombol `QR Client` membuka gambar QR SVG dari `/kehadiran/<attendance_token>/qr.svg` pada tab baru. Isi QR adalah URL halaman verifikasi kehadiran client, bukan token mentah.
+- Jika URL Client belum pernah digenerate, tombol `QR Client` tampil disabled sampai `Generate` berhasil.
 - Jika URL belum pernah dibuat, klik `Generate` langsung membuat URL dan menampilkan popup notifikasi `URL publik sudah dibuat.`.
 - Jika URL sudah pernah dibuat, klik `Generate` membuka popup peringatan `Terakhir generate pada (tanggal terakhir generate).` lalu baris baru `Apakah akan membuat ulang URL?`.
 - Popup konfirmasi memiliki tombol `Ya` warna biru dan `Batal` warna merah.
 - Klik `Ya` membuat atau memperbarui `attendance_token_nonce`, mengisi `attendance_token_generated_at`, dan mengembalikan URL publik baru.
+- Response JSON generate juga mengembalikan `attendance_qr_url`; frontend memakai value ini untuk mengaktifkan tombol `QR Client` tanpa reload halaman.
 - Setelah sukses, popup menampilkan `URL publik sudah dibuat.` dengan tombol `Buka` warna biru dan `Tutup` warna merah.
 - Tombol `Buka` membuka halaman verifikasi kehadiran dengan token terbaru pada tab baru.
 - Event generate dicatat sebagai `GENERATE_CLIENT_ATTENDANCE_URL` pada log activity.
@@ -545,6 +558,8 @@ Perilaku session staff:
 - Session staff diperpanjang setiap request staff aktif.
 - Session staff berakhir setelah idle 2 jam.
 - Jika session staff invalid, expired, staff diblokir, atau akses sudah dicabut, staff diarahkan ke halaman pesan session staff.
+- Halaman pesan session staff tidak menampilkan kalimat `Session staff berakhir karena idle 2 jam.`; pesan default hanya meminta staff menghubungi client untuk membuka akses kembali.
+- Jika client menekan tombol `Logout` staff dari menu Staff saat staff masih membuka halaman staff, halaman staff menampilkan `Logout staff berhasil.` tanpa pesan idle.
 - Tombol `Login` pada halaman Staff client berubah menjadi `Logout` selama staff memiliki akses aktif.
 - Tombol kembali menjadi `Login` setelah staff logout, client logout staff, staff idle 2 jam, atau akses dicabut.
 
@@ -1019,7 +1034,7 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Verifikasi export Excel admin dapat dibaca kembali dengan Pandas.
 - Verifikasi `py_compile app.py` berhasil dengan interpreter `.venv`.
 - Verifikasi route publik `/kehadiran/<attendance_token>` render halaman input nomor HP.
-- Verifikasi API kehadiran mengisi `Guests.kehadiran`, mengembalikan popup selamat datang, menolak nomor tidak terdaftar, dan mendeteksi nomor yang sudah terverifikasi.
+- Verifikasi API kehadiran publik sekarang membuat request pending konfirmasi staff, menampilkan status tunggu di halaman tamu, dan memproses hasil konfirmasi/timeout/tolak tanpa menampilkan `Request ID` atau `Kode pemeriksaan`.
 - Verifikasi Manage Client memiliki kolom `URL Client` dengan tombol `Generate`.
 - Verifikasi endpoint generate URL client memperbarui nonce/timestamp, menghasilkan URL baru, dan membuat token lama invalid.
 - Verifikasi terbaru: `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 81 test.
@@ -1050,6 +1065,8 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Fix syntax Python production di `services/guest_service.py`: semua multiple exception sekarang memakai `except (A, B):`; commit deploy `6e4e7b2`.
 - Fallback data demo dashboard client ditambahkan di `services/schema_service.py` agar mode Demo tetap tampil di VPS tanpa file Excel lokal; commit deploy `9d85101`.
 - Audit dokumentasi 2026-07-02: `context.md` dan `rules.txt` direstore dari `archieve/project_notes/`, section Deploy VPS dan Job Otomatis ditambahkan, dan aturan dokumen aktif diperjelas.
+- Audit dokumentasi 2026-07-05: `context.md` diperbarui untuk mencatat tombol `QR Client`, route `/kehadiran/<attendance_token>/qr.svg`, alur verifikasi tamu berbasis pending konfirmasi staff tanpa popup tamu, pesan timeout/tolak terbaru, penghapusan `Request ID`/`Kode pemeriksaan` dari UI tamu, dan perubahan pesan halaman session staff.
+- Verifikasi implementasi terbaru sebelum audit dokumentasi: `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 103 test.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.

@@ -135,6 +135,7 @@ p {
     align-items: center;
     gap: 10px;
     margin-top: 16px;
+    flex-wrap: wrap;
 }
 
 .attendance-link-row input {
@@ -1549,6 +1550,17 @@ button:disabled {
     transform: none;
 }
 
+.button-link.is-disabled,
+.button-link.is-disabled:hover {
+    background: rgba(118, 118, 128, 0.16);
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.62;
+    pointer-events: none;
+    box-shadow: none;
+    transform: none;
+}
+
 .login-card button,
 .full-button {
     width: 100%;
@@ -1665,6 +1677,7 @@ tr.is-editing .editable-cell .read-value {
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .inline-action-form,

@@ -94,6 +94,23 @@ def create_attendance_blueprint(deps):
             error_message="",
         )
 
+    # Fungsi untuk membuat gambar QR URL verifikasi kehadiran client.
+    @attendance_bp.route("/kehadiran/<attendance_token>/qr.svg")
+    # Route untuk mengirim QR SVG yang berisi URL halaman verifikasi kehadiran.
+    def guest_attendance_qr_image(attendance_token):
+        owner_user = deps.get_attendance_owner_from_token(attendance_token)
+        if not owner_user:
+            return Response("Link verifikasi tidak valid.", status=404, mimetype="text/plain")
+        if not deps.is_owner_in_active_billing_period(owner_user):
+            return Response(deps.build_inactive_billing_period_message(), status=403, mimetype="text/plain")
+
+        attendance_url = url_for(
+            "attendance.guest_attendance_landing",
+            attendance_token=attendance_token,
+            _external=True,
+        )
+        return Response(deps.build_guest_qr_svg(attendance_url), mimetype="image/svg+xml")
+
     # Fungsi API untuk memeriksa nomor HP tamu dan mencatat waktu kehadiran.
     @attendance_bp.route("/kehadiran/<attendance_token>/verify", methods=["POST"])
     # Route untuk memproses verifikasi kehadiran tamu.

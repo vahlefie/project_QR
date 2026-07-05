@@ -403,7 +403,9 @@ class AdminRouteTest(unittest.TestCase):
 
         self.assertIn("URL Client", html)
         self.assertIn("Generate", html)
+        self.assertIn("QR Client", html)
         self.assertIn("/admin/users/99/attendance-url/generate", html)
+        self.assertIn('aria-disabled="true"', html)
 
     # Fungsi untuk memastikan admin bisa generate URL client dan token lama menjadi invalid.
     def test_generate_user_attendance_url_refreshes_client_token(self):
@@ -441,6 +443,8 @@ class AdminRouteTest(unittest.TestCase):
         self.assertEqual(payload["status"], "success")
         self.assertEqual(payload["message"], "URL publik sudah dibuat.")
         self.assertIn("/kehadiran/", payload["attendance_url"])
+        self.assertIn("/kehadiran/", payload["attendance_qr_url"])
+        self.assertIn("/qr.svg", payload["attendance_qr_url"])
 
         with app_module.app.app_context():
             client = app_module.db.session.get(User, client_id)

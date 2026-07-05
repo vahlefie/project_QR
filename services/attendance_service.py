@@ -108,6 +108,20 @@ def build_guest_attendance_url(owner_user):
     )
 
 
+# Fungsi untuk membuat URL gambar QR halaman verifikasi kehadiran client.
+def build_guest_attendance_qr_url(owner_user):
+    if not is_owner_in_active_billing_period(owner_user):
+        return ""
+    attendance_token = build_guest_attendance_token(owner_user)
+    if not attendance_token:
+        return ""
+    return url_for(
+        "attendance.guest_attendance_qr_image",
+        attendance_token=attendance_token,
+        _external=True,
+    )
+
+
 # Fungsi untuk memeriksa apakah user premium.
 def is_premium_user(account):
     return bool(account and str(getattr(account, "paket", "") or "").lower() == PACKAGE_PREMIUM)

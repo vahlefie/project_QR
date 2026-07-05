@@ -720,6 +720,7 @@ def create_admin_blueprint(deps):
                 "status": "success",
                 "message": "URL publik sudah dibuat.",
                 "attendance_url": attendance_url,
+                "attendance_qr_url": deps.build_guest_attendance_qr_url(account),
                 "generated_at": generated_at_text,
             }
         )

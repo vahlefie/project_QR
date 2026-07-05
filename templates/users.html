@@ -113,15 +113,29 @@
                         </td>
                         <td>
                             {% if account.aktivasi %}
-                                <button
-                                    type="button"
-                                    class="secondary-button attendance-url-generate-button"
-                                    data-generate-url="{{ url_for('admin.generate_user_attendance_url', user_id=account.id) }}"
-                                    data-user-name="{{ account.nama or account.username }}"
-                                    data-last-generated="{{ attendance_url_state.get('generated_at_text', 'Belum pernah dibuat') }}"
-                                >
-                                    Generate
-                                </button>
+                                {% set attendance_qr_url = build_guest_attendance_qr_url(account) %}
+                                <div class="action-group">
+                                    <button
+                                        type="button"
+                                        class="secondary-button attendance-url-generate-button"
+                                        data-generate-url="{{ url_for('admin.generate_user_attendance_url', user_id=account.id) }}"
+                                        data-user-name="{{ account.nama or account.username }}"
+                                        data-last-generated="{{ attendance_url_state.get('generated_at_text', 'Belum pernah dibuat') }}"
+                                        data-qr-link-id="attendance-qr-link-{{ account.id }}"
+                                    >
+                                        Generate
+                                    </button>
+                                    <a
+                                        id="attendance-qr-link-{{ account.id }}"
+                                        class="button-link attendance-url-qr-button {% if not attendance_qr_url %}is-disabled{% endif %}"
+                                        {% if attendance_qr_url %}href="{{ attendance_qr_url }}"{% endif %}
+                                        target="_blank"
+                                        rel="noopener"
+                                        aria-disabled="{{ 'false' if attendance_qr_url else 'true' }}"
+                                    >
+                                        QR Client
+                                    </a>
+                                </div>
                             {% else %}
                                 N/A
                             {% endif %}
@@ -598,6 +612,27 @@
         openModal(attendanceUrlModal);
     }
 
+    function updateAttendanceQrButton(button, attendanceQrUrl = "") {
+        if (!button || !button.dataset.qrLinkId) {
+            return;
+        }
+
+        const qrLink = document.getElementById(button.dataset.qrLinkId);
+        if (!qrLink) {
+            return;
+        }
+
+        if (attendanceQrUrl) {
+            qrLink.href = attendanceQrUrl;
+            qrLink.classList.remove("is-disabled");
+            qrLink.setAttribute("aria-disabled", "false");
+        } else {
+            qrLink.removeAttribute("href");
+            qrLink.classList.add("is-disabled");
+            qrLink.setAttribute("aria-disabled", "true");
+        }
+    }
+
     async function generateAttendanceUrl() {
         if (!pendingAttendanceButton) {
             return;
@@ -616,6 +651,7 @@
             }
 
             pendingAttendanceButton.dataset.lastGenerated = payload.generated_at || "Belum pernah dibuat";
+            updateAttendanceQrButton(pendingAttendanceButton, payload.attendance_qr_url || "");
             showAttendanceUrlResult(payload.message || "URL publik sudah dibuat.", payload.attendance_url || "");
         } catch (error) {
             showAttendanceUrlResult("URL publik gagal dibuat.");
@@ -801,6 +837,14 @@
         if (generatedAttendanceUrl) {
             window.open(generatedAttendanceUrl, "_blank", "noopener");
         }
+    });
+
+    document.querySelectorAll(".attendance-url-qr-button").forEach((link) => {
+        link.addEventListener("click", (event) => {
+            if (link.getAttribute("aria-disabled") === "true") {
+                event.preventDefault();
+            }
+        });
     });
 </script>
 {% endblock %}

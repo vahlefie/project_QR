@@ -535,6 +535,11 @@ def build_guest_attendance_url(owner_user):
     return attendance_service.build_guest_attendance_url(owner_user)
 
 
+# Fungsi untuk membuat URL gambar QR halaman verifikasi kehadiran client.
+def build_guest_attendance_qr_url(owner_user):
+    return attendance_service.build_guest_attendance_qr_url(owner_user)
+
+
 # Fungsi untuk membuat ulang URL publik verifikasi kehadiran tamu
 def generate_guest_attendance_url(owner_user):
     return attendance_service.generate_guest_attendance_url(owner_user)
@@ -655,6 +660,7 @@ def inject_template_feature_flags():
         current_user and current_user.role == ROLE_USER and calculate_account_activation_status(current_user)
     )
     return {
+        "build_guest_attendance_qr_url": build_guest_attendance_qr_url,
         "build_guest_qr_url": build_guest_qr_url,
         "build_guest_short_qr_url": build_guest_short_qr_url,
         "build_pagination_url": build_pagination_url,
@@ -1162,6 +1168,7 @@ def build_blueprint_dependencies():
         build_active_guest_export_filename=build_active_guest_export_filename,
         build_final_archive_excel=build_final_archive_excel,
         build_final_guest_export_filename=build_final_guest_export_filename,
+        build_guest_attendance_qr_url=build_guest_attendance_qr_url,
         build_guest_attendance_url=build_guest_attendance_url,
         build_guest_qr_svg=build_guest_qr_svg,
         build_guest_qr_token=build_guest_qr_token,

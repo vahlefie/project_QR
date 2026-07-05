@@ -93,6 +93,7 @@ class AttendanceRouteTest(unittest.TestCase):
         endpoints = {rule.endpoint for rule in app_module.app.url_map.iter_rules()}
 
         self.assertIn("attendance.guest_attendance_landing", endpoints)
+        self.assertIn("attendance.guest_attendance_qr_image", endpoints)
         self.assertIn("attendance.verify_guest_attendance_route", endpoints)
         self.assertIn("attendance.guest_attendance_request_status", endpoints)
         self.assertIn("attendance.guest_attendance_request_result", endpoints)
@@ -111,6 +112,29 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json["status"], "invalid_link")
         self.assertEqual(response.json["client_request_id"], "test-client-request")
+
+    # Fungsi untuk memastikan QR Client berisi URL halaman verifikasi kehadiran.
+    def test_attendance_client_qr_image_contains_attendance_landing_url(self):
+        _, _, attendance_token = self.create_active_attendance_owner("attendance_qr_client", 628120040004)
+        captured = {}
+        original_build_guest_qr_svg = app_module.attendance_service.build_guest_qr_svg
+        try:
+
+            # Fungsi test helper untuk menangkap nilai yang dimasukkan ke QR.
+            def fake_build_guest_qr_svg(qr_value):
+                captured["value"] = qr_value
+                return b"<svg></svg>"
+
+            app_module.attendance_service.build_guest_qr_svg = fake_build_guest_qr_svg
+            response = self.client.get(f"/kehadiran/{attendance_token}/qr.svg")
+        finally:
+            app_module.attendance_service.build_guest_qr_svg = original_build_guest_qr_svg
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/svg+xml")
+        self.assertIn("<svg", response.get_data(as_text=True))
+        self.assertIn(f"/kehadiran/{attendance_token}", captured["value"])
+        self.assertNotIn("/qr.svg", captured["value"])
 
     # Fungsi untuk memastikan halaman tamu menunggu staff lalu memuat hasil sukses.
     def test_attendance_guest_waits_for_staff_confirmation_result_page(self):
