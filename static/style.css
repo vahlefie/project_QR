@@ -2148,12 +2148,12 @@ tbody tr:hover {
     .sidebar {
         position: static;
         display: flex;
-        flex-direction: row;
+        flex-direction: column;
         height: auto;
-        padding: 14px;
-        gap: 8px;
-        overflow-x: auto;
-        overflow-y: hidden;
+        max-height: none;
+        padding: 10px 14px;
+        gap: 0;
+        overflow: visible;
         border-right: 0;
         border-bottom: 1px solid rgba(255, 255, 255, 0.68);
     }
@@ -2167,26 +2167,38 @@ tbody tr:hover {
     }
 
     .sidebar-panels {
-        flex: 0 0 auto;
+        width: 100%;
+        flex: 1 1 auto;
+        min-height: auto;
         overflow: visible;
     }
 
     .sidebar-panel.is-active {
-        flex: 0 0 auto;
-        flex-direction: row;
+        width: 100%;
+        flex: 1 1 auto;
+        flex-direction: column;
     }
 
     .sidebar a,
     .sidebar .sidebar-disabled-link,
     .sidebar-menu-button,
     .sidebar-back-button {
+        width: 100%;
+        min-height: 36px;
         flex: 0 0 auto;
-        margin: 0;
-        white-space: nowrap;
+        margin: 0 0 4px;
+        padding: 8px 12px;
+        border-radius: 12px;
+        font-size: 14px;
+        white-space: normal;
+    }
+
+    .sidebar-back-button {
+        margin-bottom: 8px;
     }
 
     .sidebar .logout {
-        margin-top: 0;
+        margin-top: 4px;
     }
 
     .topbar {

@@ -1,11 +1,17 @@
 (function () {
     const storageKey = "projectQrSidebarHidden";
+    const mobileAutoHideKey = "projectQrMobileSidebarAutoHide";
     const app = document.querySelector(".app");
     const toggleButton = document.querySelector(".sidebar-toggle");
+    const sidebar = document.querySelector(".sidebar");
     let fallbackHidden = false;
 
     if (!app || !toggleButton) {
         return;
+    }
+
+    function isMobileSidebar() {
+        return window.matchMedia("(max-width: 760px)").matches;
     }
 
     function readStoredState() {
@@ -37,9 +43,39 @@
 
     setSidebarState(readStoredState());
 
+    try {
+        if (isMobileSidebar() && sessionStorage.getItem(mobileAutoHideKey) === "true") {
+            sessionStorage.removeItem(mobileAutoHideKey);
+            setSidebarState(true);
+        }
+    } catch (error) {
+        // The normal persisted sidebar state is still enough when session storage is blocked.
+    }
+
     toggleButton.addEventListener("click", () => {
         const isHidden = !app.classList.contains("sidebar-is-hidden");
         writeStoredState(isHidden);
         setSidebarState(isHidden);
     });
+
+    if (sidebar) {
+        sidebar.querySelectorAll("a[href]").forEach((link) => {
+            link.addEventListener("click", () => {
+                if (!isMobileSidebar()) {
+                    return;
+                }
+
+                const href = link.getAttribute("href") || "";
+                if (link.classList.contains("sidebar-disabled-link") || href === "#" || href.startsWith("javascript:")) {
+                    return;
+                }
+
+                try {
+                    sessionStorage.setItem(mobileAutoHideKey, "true");
+                } catch (error) {
+                    writeStoredState(true);
+                }
+            });
+        });
+    }
 })();
