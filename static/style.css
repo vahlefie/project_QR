@@ -146,6 +146,33 @@ p {
     flex: 0 0 auto;
 }
 
+.dashboard-attendance-actions {
+    display: grid;
+    gap: 10px;
+    padding: 16px 0;
+}
+
+.dashboard-attendance-open-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 107px;
+    gap: 5px;
+    align-items: center;
+}
+
+.dashboard-attendance-open-row input {
+    min-width: 0;
+}
+
+.dashboard-attendance-open-row .button-link {
+    width: 100%;
+    min-width: 0;
+}
+
+.dashboard-attendance-qr {
+    width: 100%;
+    justify-self: start;
+}
+
 .attendance-error {
     text-align: center;
 }
@@ -2247,6 +2274,16 @@ tbody tr:hover {
     .attendance-link-row {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .dashboard-attendance-open-row {
+        grid-template-columns: minmax(0, 1fr) 82px;
+        gap: 8px;
+    }
+
+    .dashboard-attendance-qr {
+        width: 100%;
+        justify-self: stretch;
     }
 
     .dashboard-chart-actions {
