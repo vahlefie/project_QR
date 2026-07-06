@@ -6,5 +6,8 @@
 - jelaskan kegunaaan atau peruntukan fungsi dengan tagar komentar "#" diatas baris setiap fungsi
 - selalu test hasil coding dengan menyeluruh, termasuk dari sisi browser pengguna
 - update context.md setiap kali mengedit fitur, format, atau spesifikasi project
+- setelah selesai melakukan perubahan kode, cek apakah context.md perlu diupdate; jika perubahan menyentuh fitur, UI/UX, route, model database, validasi, job otomatis, deploy, atau spesifikasi, dokumentasikan sebelum memberi jawaban final
+- catat perubahan dokumentasi dengan tanggal, ringkasan perilaku baru, file/route penting bila relevan, dan verifikasi yang sudah dilakukan
+- jika tidak ada perubahan dokumentasi yang diperlukan, sebutkan alasannya pada jawaban final
 - jangan pindahkan context.md dan rules.txt ke archieve karena keduanya adalah dokumentasi aktif project
 - dokumentasikan perubahan deploy, environment production, service systemd, nginx, ssl, cron, dan job otomatis di context.md

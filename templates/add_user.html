@@ -114,37 +114,54 @@
 
             <label>
                 <span>Provinsi</span>
-                <input
-                    id="provinceInput"
-                    type="text"
-                    name="provinsi"
-                    list="provinceOptions"
-                    autocomplete="off"
-                    value="{{ form_data.get('provinsi', '') }}"
-                    placeholder="Ketik / pilih provinsi"
-                >
-                <datalist id="provinceOptions"></datalist>
+                <div class="search-select" data-search-select>
+                    <input
+                        id="provinceInput"
+                        type="text"
+                        name="provinsi"
+                        autocomplete="off"
+                        value="{{ form_data.get('provinsi', '') }}"
+                        placeholder="Pilih / cari provinsi"
+                        data-search-input
+                    >
+                    <button
+                        type="button"
+                        class="search-select-toggle"
+                        aria-label="Buka pilihan provinsi"
+                        data-search-toggle
+                    ></button>
+                    <div class="search-select-menu" id="provinceOptions" role="listbox" hidden></div>
+                </div>
             </label>
 
             <label>
                 <span>Kota / Kabupaten</span>
-                <input
-                    id="cityInput"
-                    type="text"
-                    name="kota"
-                    list="cityOptions"
-                    maxlength="60"
-                    autocomplete="off"
-                    value="{{ form_data.get('kota', '') }}"
-                    placeholder="Pilih provinsi dahulu"
-                    disabled
-                >
-                <datalist id="cityOptions"></datalist>
+                <div class="search-select is-disabled" data-search-select>
+                    <input
+                        id="cityInput"
+                        type="text"
+                        name="kota"
+                        maxlength="60"
+                        autocomplete="off"
+                        value="{{ form_data.get('kota', '') }}"
+                        placeholder="Pilih provinsi dahulu"
+                        disabled
+                        data-search-input
+                    >
+                    <button
+                        type="button"
+                        class="search-select-toggle"
+                        aria-label="Buka pilihan kota atau kabupaten"
+                        disabled
+                        data-search-toggle
+                    ></button>
+                    <div class="search-select-menu" id="cityOptions" role="listbox" hidden></div>
+                </div>
             </label>
         </div>
 
         <div class="form-actions">
-            <a class="secondary-link" href="/users">Batal</a>
+            <a class="button-link danger-button" href="/users">Batal</a>
             <button type="submit">Tambah Client</button>
         </div>
     </form>
@@ -161,12 +178,15 @@
     const phoneLocalInput = document.getElementById("phoneLocalInput");
     const phoneFullInput = document.getElementById("phoneFullInput");
     const provinceInput = document.getElementById("provinceInput");
-    const provinceOptions = document.getElementById("provinceOptions");
     const cityInput = document.getElementById("cityInput");
     const cityOptions = document.getElementById("cityOptions");
+    const provinceSelect = provinceInput.closest("[data-search-select]");
+    const citySelect = cityInput.closest("[data-search-select]");
     const initialCityValue = cityInput.value;
     const regions = window.INDONESIA_REGIONS || {};
     const provinces = Object.keys(regions);
+    let cityItems = [];
+    let activeSearchSelect = null;
     const letters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     const numbers = "0123456789";
     const specials = "!@#$%&*?";
@@ -197,12 +217,122 @@
         return shuffleCharacters(password);
     }
 
-    function setOptions(datalist, items) {
-        datalist.innerHTML = "";
-        items.forEach((item) => {
-            const option = document.createElement("option");
-            option.value = item;
-            datalist.appendChild(option);
+    function getSearchSelectParts(select) {
+        return {
+            input: select.querySelector("[data-search-input]"),
+            menu: select.querySelector(".search-select-menu"),
+            toggle: select.querySelector("[data-search-toggle]"),
+        };
+    }
+
+    function closeSearchSelect(select) {
+        if (!select) {
+            return;
+        }
+
+        const { menu } = getSearchSelectParts(select);
+        select.classList.remove("is-open");
+        menu.hidden = true;
+        if (activeSearchSelect === select) {
+            activeSearchSelect = null;
+        }
+    }
+
+    function closeActiveSearchSelect(exceptSelect = null) {
+        if (activeSearchSelect && activeSearchSelect !== exceptSelect) {
+            closeSearchSelect(activeSearchSelect);
+        }
+    }
+
+    function filterSearchItems(items, keyword) {
+        const normalizedKeyword = keyword.trim().toLowerCase();
+        if (!normalizedKeyword) {
+            return items;
+        }
+
+        return items.filter((item) => item.toLowerCase().includes(normalizedKeyword));
+    }
+
+    function renderSearchOptions(select, items, onSelectItem, keyword = null) {
+        const { input, menu } = getSearchSelectParts(select);
+        const filteredItems = filterSearchItems(items, keyword === null ? input.value : keyword);
+        menu.innerHTML = "";
+
+        if (!filteredItems.length) {
+            const emptyState = document.createElement("div");
+            emptyState.className = "search-select-empty";
+            emptyState.textContent = "Data tidak ditemukan";
+            menu.appendChild(emptyState);
+            return;
+        }
+
+        filteredItems.forEach((item) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "search-select-option";
+            option.setAttribute("role", "option");
+            option.textContent = item;
+
+            option.addEventListener("mousedown", (event) => {
+                event.preventDefault();
+            });
+            option.addEventListener("click", () => {
+                input.value = item;
+                onSelectItem(item);
+                closeSearchSelect(select);
+            });
+
+            menu.appendChild(option);
+        });
+    }
+
+    function openSearchSelect(select, items, onSelectItem, showAll = false) {
+        const { input, menu } = getSearchSelectParts(select);
+        if (input.disabled) {
+            return;
+        }
+
+        closeActiveSearchSelect(select);
+        renderSearchOptions(select, items, onSelectItem, showAll ? "" : null);
+        select.classList.add("is-open");
+        menu.hidden = false;
+        activeSearchSelect = select;
+    }
+
+    function setSearchSelectDisabled(select, isDisabled) {
+        const { input, toggle } = getSearchSelectParts(select);
+        input.disabled = isDisabled;
+        toggle.disabled = isDisabled;
+        select.classList.toggle("is-disabled", isDisabled);
+        if (isDisabled) {
+            closeSearchSelect(select);
+        }
+    }
+
+    function setupSearchSelect(select, getItems, onSelectItem) {
+        const { input, toggle } = getSearchSelectParts(select);
+
+        input.addEventListener("focus", () => openSearchSelect(select, getItems(), onSelectItem));
+        input.addEventListener("click", () => openSearchSelect(select, getItems(), onSelectItem));
+        input.addEventListener("input", () => {
+            if (input === provinceInput && !regions[input.value]) {
+                loadCities("");
+            }
+            openSearchSelect(select, getItems(), onSelectItem);
+        });
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                closeSearchSelect(select);
+            }
+        });
+        toggle.addEventListener("click", () => {
+            if (select.classList.contains("is-open")) {
+                closeSearchSelect(select);
+                return;
+            }
+
+            input.focus();
+            openSearchSelect(select, getItems(), onSelectItem, true);
         });
     }
 
@@ -212,30 +342,45 @@
             return;
         }
 
-        setOptions(provinceOptions, provinces);
         if (regions[provinceInput.value]) {
             loadCities(provinceInput.value, initialCityValue);
+        } else {
+            loadCities("");
         }
     }
 
     function loadCities(provinceName, selectedCity = "") {
-        cityInput.disabled = true;
+        cityItems = [];
         cityInput.value = "";
-        cityOptions.innerHTML = "";
 
         if (!provinceName || !regions[provinceName]) {
+            setSearchSelectDisabled(citySelect, true);
             cityInput.placeholder = "Pilih provinsi dahulu";
+            cityOptions.innerHTML = "";
             return;
         }
 
-        setOptions(cityOptions, regions[provinceName]);
-        cityInput.disabled = false;
+        cityItems = regions[provinceName];
+        setSearchSelectDisabled(citySelect, false);
         cityInput.value = selectedCity;
-        cityInput.placeholder = "Ketik / pilih kota atau kabupaten";
+        cityInput.placeholder = "Pilih / cari kota atau kabupaten";
     }
 
     provinceInput.addEventListener("change", () => {
         loadCities(provinceInput.value);
+    });
+
+    setupSearchSelect(provinceSelect, () => provinces, (provinceName) => {
+        loadCities(provinceName);
+    });
+    setupSearchSelect(citySelect, () => cityItems, (cityName) => {
+        cityInput.value = cityName;
+    });
+
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest("[data-search-select]")) {
+            closeActiveSearchSelect();
+        }
     });
 
     generatePasswordButton.addEventListener("click", () => {

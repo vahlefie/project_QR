@@ -34,7 +34,7 @@ Standar dokumentasi kode: setiap fungsi Python diberi komentar `#` tepat di atas
 - `models.py`: model database `User`, `BillingPayment`, `EventArchive`, `Guests`, `DemoGuest`, `GuestShortUrl`, `AttendanceVerificationRequest`, `AttendanceVerificationDismissal`, `WhatsappSetting`, `WhatsappTemplate`, `Staff`, `StaffAccess`, dan `LoginThrottle`.
 - `run.py`: entry point ringan untuk menjalankan server development Flask.
 - `blueprints/registry.py`: registry pendaftaran Blueprint dan daftar dependency eksplisit per Blueprint.
-- `services/account_service.py`: service helper akun untuk normalisasi nomor HP, nama tampilan, tanggal expired/status aktivasi, validasi form user/admin, generate username client, dan daftar akun manageable.
+- `services/account_service.py`: service helper akun untuk normalisasi nomor HP, nama tampilan, periode akhir/status aktivasi, validasi form user/admin, generate username client, dan daftar akun manageable.
 - `services/attendance_service.py`: service token verifikasi kehadiran, token QR tamu, generator QR SVG, format waktu kehadiran, logging attendance, pencarian tamu attendance, dan proses verifikasi nomor HP/QR.
 - `services/auth_service.py`: service autentikasi untuk normalisasi identifier, throttle login, session login, validasi password, hash password, dan lookup user aktif.
 - `services/guest_service.py`: service upload Excel tamu, validasi format, data cleaning, duplicate detection, save/replace rows, pending upload, dan helper data tamu/staff.
@@ -56,6 +56,8 @@ Standar dokumentasi kode: setiap fungsi Python diberi komentar `#` tepat di atas
 - `blueprints/admin/routes.py`: Blueprint admin/super-admin untuk manajemen client, admin, upload/export/hapus data tamu admin.
 - `templates/`: halaman login, layout role, dashboard, user management, dan data tamu.
 - `static/style.css`: tema UI utama, tabel, form, popup/modal, tombol, dropdown.
+- `static/sidebar_toggle.js`: toggle sidebar, penyimpanan state sidebar, dan auto-close sidebar pada mobile setelah klik menu.
+- `static/action_toggle.js`: helper global untuk mengubah action button lebih dari satu menjadi tombol `Show`/`Hide` dengan popup action.
 - `static/password_toggle.js`: toggle tampil/sembunyi password.
 - `static/indonesia_regions.js`: data wilayah Indonesia untuk form user.
 - `scripts/backup_monthly_logs.py`: CLI backup log bulan sebelumnya.
@@ -85,7 +87,7 @@ Kolom penting:
 - `aktivasi`
 - `paket`
 - `tgl_daftar`
-- `tgl_expired`
+- `tgl_expired` sebagai nama kolom database lama untuk `periode_akhir`
 - `password`
 - `role`
 - `must_reset_password`
@@ -722,6 +724,58 @@ Saat client reaktivasi atau membuat event baru:
 - Setelah arsip `tar.gz` berhasil dibuat dan diverifikasi, file CSV final dan file upload Excel lama yang sudah masuk arsip dihapus.
 - Event aktif berikutnya memakai nama event dari payment terbaru.
 
+## Tambah Client Backend
+
+Route:
+- `GET /admin/users/new`
+- `POST /admin/users/new`
+
+Perilaku form:
+- Menu Tambah Client tersedia untuk admin dan super admin.
+- Form tidak menampilkan `Tgl Daftar`, `Tgl Expired`/`Periode Akhir`, `Paket`, dan `Aktivasi`; nilai operasional dibuat atau diubah lewat proses backend/payment.
+- `Tgl Daftar` otomatis diisi saat client dibuat.
+- Kolom `Nama Lengkap`, `No HP`, `Email`, dan `Password` wajib diisi dan diberi tanda `*`.
+- `Nama Lengkap` hanya menerima huruf dan spasi.
+- `No HP` memakai UI prefix visual `+62`; frontend mengirim hidden value canonical `62...` dan backend tetap menormalisasi sebelum simpan.
+- `Email` wajib mengandung `@` dan `.`.
+- Password minimal 8 karakter dan dapat dibuat lewat tombol `Generate`; hasil generate tampil di field read-only agar bisa disalin.
+- Generator password membuat kombinasi huruf, angka, dan karakter spesial.
+- Kolom `Provinsi` memakai dropdown custom yang bisa diketik untuk pencarian.
+- Kolom `Kota / Kabupaten` memakai dropdown custom yang bisa diketik untuk pencarian, aktif setelah provinsi valid dipilih, dan isinya mengikuti provinsi terpilih.
+- Data wilayah diambil dari `static/indonesia_regions.js`.
+- Tombol `Batal` pada form memakai warna merah.
+
+## Payment Client
+
+Route admin/super admin:
+- `GET /admin/payment`
+- `POST /admin/payment/input`
+
+Route client:
+- `GET /user/payment`
+
+Perilaku:
+- Istilah lama `Billing` sudah diganti menjadi `Payment` pada URL, sidebar, judul halaman, dan label UI.
+- Sidebar client memiliki menu `Payment`; tombol `Billing` pada halaman Profile client sudah dihapus.
+- Admin dan super admin mencatat pembayaran manual lewat tombol/form `Input Payment`.
+- Total kas masuk dihitung dari payment yang sudah tersimpan.
+- Input `Akuntansi` sudah dihapus dari form dan tidak dipakai lagi sebagai kolom pencatatan payment.
+- Migrasi ringan di `services/schema_service.py` menghapus kolom lama `accounting_entry` pada tabel `billing_payment` jika kolom tersebut masih ada dan SQLite mendukung operasi `DROP COLUMN`.
+- Field wajib input payment: `Client`, `Tanggal Payment`, `Waktu Payment`, `Nominal`, `Jenis Bayar`, `Paket`, `Periode Mulai`, `Periode Akhir`, dan `Nama Event`.
+- `Waktu Payment` memakai format `HH:MM` dan ditampilkan sebagai kolom `Waktu` di sebelah kanan kolom `Tanggal`.
+- `Metode` hanya berisi `Transfer`, `Cash`, `QRIS`, dan `Virtual Account`; opsi `Lainnya` sudah dihapus.
+- Jika metode `Transfer`, `Bank Asal` dan `Nomor Rekening` wajib diisi.
+- Jika metode bukan `Transfer`, `Bank Asal` dan `Nomor Rekening` otomatis menjadi `N/A`, disabled, dan memakai tampilan disabled yang konsisten.
+- Saat metode `Transfer`, opsi bank `N/A` disembunyikan.
+- Pilihan `Bank Asal` berasal dari daftar bank umum Indonesia yang diurutkan alfabet.
+- `Nomor Rekening` harus 10 sampai 16 digit angka dan boleh diawali angka `0`.
+- `Jenis Bayar` berisi `Lunas`, `Sebagian`, dan `DP`.
+- Pilihan `Paket` hanya berisi paket valid aplikasi; opsi `Tidak dicatat` sudah dihapus.
+- `Periode Mulai` dapat memilih tanggal kapan saja.
+- `Periode Akhir` harus lebih dari hari ini dan tidak boleh lebih awal dari `Periode Mulai`; tanggal yang sama dengan `Periode Mulai` diperbolehkan selama tetap lebih dari hari ini.
+- Field lama `Catatan` untuk event diganti menjadi `Nama Event`; field `Catatan` baru tersedia untuk keterangan opsional.
+- Payment tersimpan dengan status `verified`, memperbarui paket/periode akhir client, dan mensinkronkan status aktivasi client.
+
 ## Autentikasi dan Role
 
 Login menggunakan:
@@ -737,6 +791,11 @@ Format input nomor HP di semua form:
 - Nomor akun admin/client unik secara global, nomor staff unik per client, dan nomor tamu manual unik per pemilik data tamu.
 
 Password disimpan dalam bentuk hash.
+
+Popup gagal login:
+- Jika password salah, halaman login menampilkan popup dengan pesan `Password salah!` lalu baris baru `Harap hubungi petugas untuk informasi lebih lanjut.`.
+- Jika email/no HP tidak ditemukan, halaman login menampilkan popup dengan pesan `Email/No HP tidak ditemukan!` lalu baris baru `Harap hubungi petugas untuk informasi lebih lanjut.`.
+- Popup gagal login memiliki tombol `Tutup` warna merah.
 
 Block akun:
 - Admin dan super admin dapat memblokir/membuka blokir client dari halaman Manage Client.
@@ -761,6 +820,14 @@ UI menggunakan tema custom dengan:
 - Popup/modal untuk konfirmasi dan form.
 - Dropdown mengikuti gaya global `select`.
 - Tabel responsif dengan horizontal scroll.
+- Tombol aksi lebih dari satu dalam `.action-group` otomatis diringkas oleh `static/action_toggle.js` menjadi tombol `Show`/`Hide`.
+- Saat tombol `Show` diklik, action lain ditampilkan dalam popup kecil yang diposisikan relatif terhadap tombol dan tetap berada dalam viewport.
+- Popup action ditambahkan ke `document.body` agar posisinya tidak bergeser oleh parent dengan efek visual seperti `backdrop-filter`.
+- Hanya satu popup action boleh terbuka dalam satu waktu; klik di luar popup, scroll, atau resize akan menutup/menyesuaikan posisi popup.
+- Tombol `Batal` di form dan popup memakai warna merah/danger.
+- Pada mobile, sidebar memakai layout menu vertikal yang lebih ringkas agar semua menu utama tetap terlihat tanpa scroll.
+- Pada mobile, setelah user klik menu sidebar dan halaman baru selesai load, sidebar otomatis tertutup.
+- Dashboard client pada kartu `Verifikasi Kehadiran` menampilkan kolom link di kiri dan tombol `Buka` di kanan dalam satu baris; tombol `QR Client` berada di bawah keduanya.
 
 Saat menambah fitur UI, gunakan class dan pola yang sudah ada di `static/style.css`.
 
@@ -1069,6 +1136,8 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Audit dokumentasi 2026-07-05: `context.md` diperbarui untuk mencatat tombol `QR Client`, route `/kehadiran/<attendance_token>/qr.png`, alur verifikasi tamu berbasis pending konfirmasi staff tanpa popup tamu, pesan timeout/tolak terbaru, penghapusan `Request ID`/`Kode pemeriksaan` dari UI tamu, dan perubahan pesan halaman session staff.
 - Update QR Client 2026-07-05: tombol `QR Client` sekarang mengunduh file PNG siap cetak berukuran sekitar 2400 px, dengan route lama `/kehadiran/<attendance_token>/qr.svg` dialihkan ke `/kehadiran/<attendance_token>/qr.png`.
 - Verifikasi QR Client PNG: `.venv\Scripts\python.exe -m py_compile app.py constants.py services\attendance_service.py blueprints\attendance\routes.py blueprints\registry.py`, `.venv\Scripts\python.exe -m unittest tests.test_attendance_service`, `.venv\Scripts\python.exe -m unittest tests.test_attendance tests.test_admin_routes`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 104 test.
+- Audit dokumentasi 2026-07-07: `context.md` diperbarui untuk mencatat perubahan Tambah Client, Payment Client, popup gagal login, action popup `Show`/`Hide`, mobile sidebar auto-close, layout Verifikasi Kehadiran dashboard client, tombol `Batal` merah, dan searchable dropdown Provinsi/Kota.
+- Aturan dokumentasi 2026-07-07: `rules.txt` diperketat agar setiap perubahan fitur, UI/UX, route, model database, validasi, job otomatis, deploy, atau spesifikasi wajib ditutup dengan update `context.md` sebelum jawaban final.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.
