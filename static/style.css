@@ -1703,7 +1703,39 @@ tr.is-editing .editable-cell .read-value {
     display: flex;
     gap: 8px;
     align-items: center;
-    flex-wrap: wrap;
+}
+
+.action-group.is-collapsible {
+    align-items: flex-start;
+}
+
+.action-menu-items {
+    position: fixed;
+    z-index: 25;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(88px, 1fr));
+    width: min(232px, calc(100vw - 16px));
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.14);
+    gap: 8px;
+    overflow: auto;
+}
+
+.action-menu-items > * {
+    min-width: 0;
+}
+
+.action-menu-items button,
+.action-menu-items .button-link {
+    width: 100%;
+    min-width: 0;
+}
+
+.action-menu-items[hidden] {
+    display: none;
 }
 
 .inline-action-form,
@@ -1996,6 +2028,7 @@ th {
     color: var(--muted);
     font-size: 13px;
     font-weight: 700;
+    text-align: center;
 }
 
 tr:last-child td {
@@ -2162,7 +2195,7 @@ tbody tr:hover {
     overflow-wrap: anywhere;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1080px) {
     .app {
         grid-template-columns: 1fr;
     }

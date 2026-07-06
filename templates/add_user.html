@@ -82,16 +82,6 @@
             </label>
 
             <label>
-                <span>Alamat</span>
-                <input
-                    type="text"
-                    name="alamat"
-                    maxlength="100"
-                    value="{{ form_data.get('alamat', '') }}"
-                >
-            </label>
-
-            <label>
                 <span>Email*</span>
                 <input
                     type="text"
@@ -99,6 +89,26 @@
                     maxlength="30"
                     value="{{ form_data.get('email', '') }}"
                     required
+                >
+            </label>
+
+              <label>
+                <span>Perusahaan</span>
+                <input
+                    type="text"
+                    name="perusahaan"
+                    maxlength="50"
+                    value="{{ form_data.get('perusahaan', '') }}"
+                >
+            </label>
+
+            <label>
+                <span>Alamat</span>
+                <input
+                    type="text"
+                    name="alamat"
+                    maxlength="100"
+                    value="{{ form_data.get('alamat', '') }}"
                 >
             </label>
 
@@ -114,16 +124,6 @@
                     placeholder="Ketik / pilih provinsi"
                 >
                 <datalist id="provinceOptions"></datalist>
-            </label>
-
-            <label>
-                <span>Perusahaan</span>
-                <input
-                    type="text"
-                    name="perusahaan"
-                    maxlength="50"
-                    value="{{ form_data.get('perusahaan', '') }}"
-                >
             </label>
 
             <label>
