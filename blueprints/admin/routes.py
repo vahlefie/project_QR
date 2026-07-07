@@ -41,6 +41,28 @@ def create_admin_blueprint(deps):
         except (TypeError, ValueError):
             return None
 
+    # Fungsi untuk mengambil daftar client pada halaman payment.
+    def get_payment_clients():
+        return deps.User.query.filter_by(role=deps.ROLE_USER).order_by(deps.User.nama.asc()).all()
+
+    # Fungsi untuk membangun context histori payment client.
+    def build_payment_history_context():
+        selected_owner_user_id = deps.parse_int(request.args.get("owner_user_id"))
+        clients = get_payment_clients()
+        query = deps.BillingPayment.query.join(deps.User)
+
+        if selected_owner_user_id:
+            query = query.filter(deps.BillingPayment.user_id == selected_owner_user_id)
+
+        payments = query.order_by(deps.BillingPayment.payment_date.desc(), deps.BillingPayment.id.desc()).all()
+        return {
+            "user": deps.get_current_user_display_name(),
+            "clients": clients,
+            "payments": payments,
+            "selected_owner_user_id": selected_owner_user_id,
+            "total_cash_in": sum(payment.amount or 0 for payment in payments),
+        }
+
     # Fungsi untuk memvalidasi password akun aktif sebelum aksi sensitif.
     def validate_current_account_password():
         current_user = deps.get_current_user()
@@ -71,32 +93,30 @@ def create_admin_blueprint(deps):
     @admin_bp.route("/admin/payment")
     @deps.login_required
     @deps.role_required(deps.ROLE_ADMIN, deps.ROLE_SUPER_ADMIN)
-    # Route untuk melihat payment semua client.
+    # Route untuk menampilkan form input payment client.
     def admin_payment():
         selected_owner_user_id = deps.parse_int(request.args.get("owner_user_id"))
-        clients = deps.User.query.filter_by(role=deps.ROLE_USER).order_by(deps.User.nama.asc()).all()
-        query = deps.BillingPayment.query.join(deps.User)
-
-        if selected_owner_user_id:
-            query = query.filter(deps.BillingPayment.user_id == selected_owner_user_id)
-
-        payments = query.order_by(deps.BillingPayment.payment_date.desc(), deps.BillingPayment.id.desc()).all()
-        total_cash_in = sum(payment.amount or 0 for payment in payments)
         return render_template(
             "admin_payment.html",
             user=deps.get_current_user_display_name(),
-            clients=clients,
-            payments=payments,
+            clients=get_payment_clients(),
             selected_owner_user_id=selected_owner_user_id,
             bank_options=deps.INDONESIA_BANK_OPTIONS,
             package_options=deps.PACKAGE_OPTIONS,
             payment_type_options=("Lunas", "Sebagian", "DP"),
             min_period_end_date=deps.get_min_period_end_date().isoformat(),
-            total_cash_in=total_cash_in,
             today=date.today().isoformat(),
             message=request.args.get("message", ""),
             error=request.args.get("error", ""),
         )
+
+    # Fungsi untuk menampilkan histori pembayaran client.
+    @admin_bp.route("/admin/payment-history")
+    @deps.login_required
+    @deps.role_required(deps.ROLE_ADMIN, deps.ROLE_SUPER_ADMIN)
+    # Route untuk melihat histori payment semua client.
+    def admin_payment_history():
+        return render_template("admin_payment_history.html", **build_payment_history_context())
 
     # Fungsi untuk mencatat pembayaran client secara manual.
     @admin_bp.route("/admin/payment/input", methods=["POST"])

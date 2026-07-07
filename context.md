@@ -750,6 +750,7 @@ Perilaku form:
 Route admin/super admin:
 - `GET /admin/payment`
 - `POST /admin/payment/input`
+- `GET /admin/payment-history`
 
 Route client:
 - `GET /user/payment`
@@ -757,8 +758,12 @@ Route client:
 Perilaku:
 - Istilah lama `Billing` sudah diganti menjadi `Payment` pada URL, sidebar, judul halaman, dan label UI.
 - Sidebar client memiliki menu `Payment`; tombol `Billing` pada halaman Profile client sudah dihapus.
-- Admin dan super admin mencatat pembayaran manual lewat tombol/form `Input Payment`.
-- Total kas masuk dihitung dari payment yang sudah tersimpan.
+- Sidebar admin dan super admin pada submenu `Client` menampilkan `Payment`, lalu `Payment History` tepat di bawahnya.
+- Halaman `/admin/payment` khusus untuk input payment client.
+- Halaman `/admin/payment-history` khusus untuk histori pembayaran client.
+- Admin dan super admin mencatat pembayaran manual lewat tombol/form `Input Payment` pada halaman `Payment`.
+- Total kas masuk dihitung dari payment yang sudah tersimpan dan ditampilkan pada halaman `Payment History`.
+- Histori payment pada halaman `Payment History` dapat difilter berdasarkan client.
 - Input `Akuntansi` sudah dihapus dari form dan tidak dipakai lagi sebagai kolom pencatatan payment.
 - Migrasi ringan di `services/schema_service.py` menghapus kolom lama `accounting_entry` pada tabel `billing_payment` jika kolom tersebut masih ada dan SQLite mendukung operasi `DROP COLUMN`.
 - Field wajib input payment: `Client`, `Tanggal Payment`, `Waktu Payment`, `Nominal`, `Jenis Bayar`, `Paket`, `Periode Mulai`, `Periode Akhir`, dan `Nama Event`.
@@ -1138,6 +1143,8 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Verifikasi QR Client PNG: `.venv\Scripts\python.exe -m py_compile app.py constants.py services\attendance_service.py blueprints\attendance\routes.py blueprints\registry.py`, `.venv\Scripts\python.exe -m unittest tests.test_attendance_service`, `.venv\Scripts\python.exe -m unittest tests.test_attendance tests.test_admin_routes`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 104 test.
 - Audit dokumentasi 2026-07-07: `context.md` diperbarui untuk mencatat perubahan Tambah Client, Payment Client, popup gagal login, action popup `Show`/`Hide`, mobile sidebar auto-close, layout Verifikasi Kehadiran dashboard client, tombol `Batal` merah, dan searchable dropdown Provinsi/Kota.
 - Aturan dokumentasi 2026-07-07: `rules.txt` diperketat agar setiap perubahan fitur, UI/UX, route, model database, validasi, job otomatis, deploy, atau spesifikasi wajib ditutup dengan update `context.md` sebelum jawaban final.
+- Update Payment History 2026-07-07: histori pembayaran admin/super admin dipindahkan dari halaman `/admin/payment` ke halaman baru `/admin/payment-history`, dan submenu `Client` sekarang menampilkan `Payment History` tepat di bawah `Payment`.
+- Verifikasi Payment History 2026-07-07: `.venv\Scripts\python.exe -m py_compile blueprints\admin\routes.py`, targeted unittest route admin payment, dan render template `admin_payment.html` serta `admin_payment_history.html` berhasil.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.

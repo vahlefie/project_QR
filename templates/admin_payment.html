@@ -3,7 +3,6 @@
 {% block content %}
 <div class="card">
     <h3>Payment Client</h3>
-    <p class="stat">Total kas masuk: <strong>{{ total_cash_in|rupiah }}</strong></p>
 
     {% if message %}
         <p class="success-text">{{ message }}</p>
@@ -133,76 +132,6 @@
             </div>
         </form>
     </div>
-
-    <form method="GET" class="toolbar">
-        <label>
-            <span>Filter client</span>
-            <select name="owner_user_id">
-                <option value="">Semua client</option>
-                {% for account in clients %}
-                    <option value="{{ account.id }}" {% if selected_owner_user_id == account.id %}selected{% endif %}>
-                        {{ account.nama or account.username }}
-                    </option>
-                {% endfor %}
-            </select>
-        </label>
-        <button type="submit">Apply</button>
-    </form>
-
-    {% if payments %}
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>No</th>
-                        <th>Tanggal</th>
-                        <th>Waktu</th>
-                        <th>Client</th>
-                        <th>No HP</th>
-                        <th>Paket</th>
-                        <th>Periode</th>
-                        <th>Nominal</th>
-                        <th>Metode</th>
-                        <th>Bank Asal</th>
-                        <th>Nomor Rekening</th>
-                        <th>Jenis Bayar</th>
-                        <th>Status</th>
-                        <th>Event</th>
-                        <th>Catatan</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for payment in payments %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ payment.payment_date or 'N/A' }}</td>
-                            <td>{{ payment.payment_time.strftime('%H:%M') if payment.payment_time else 'N/A' }}</td>
-                            <td>{{ payment.client.nama or payment.client.username if payment.client else 'N/A' }}</td>
-                            <td>{{ payment.client.no_hp if payment.client and payment.client.no_hp else 'N/A' }}</td>
-                            <td>{{ payment.package_name|capitalize if payment.package_name else 'N/A' }}</td>
-                            <td>
-                                {% if payment.period_start or payment.period_end %}
-                                    {{ payment.period_start or 'N/A' }} - {{ payment.period_end or 'N/A' }}
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </td>
-                            <td>{{ payment.amount|rupiah }}</td>
-                            <td>{{ payment.payment_method or 'N/A' }}</td>
-                            <td>{{ payment.origin_bank or 'N/A' }}</td>
-                            <td>{{ payment.account_number or 'N/A' }}</td>
-                            <td>{{ payment.payment_type or 'N/A' }}</td>
-                            <td><span class="status-pill is-active">{{ payment.status|capitalize }}</span></td>
-                            <td>{{ payment.event_name or 'N/A' }}</td>
-                            <td>{{ payment.notes or 'N/A' }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% else %}
-        <p>Belum ada transaksi pembayaran.</p>
-    {% endif %}
 </div>
 
 <script>

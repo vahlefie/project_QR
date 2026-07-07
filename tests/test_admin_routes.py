@@ -92,6 +92,9 @@ class AdminRouteTest(unittest.TestCase):
             ("get", "/admin/guests"),
             ("get", "/admin/guests/download"),
             ("post", "/admin/delete-guests"),
+            ("get", "/admin/payment"),
+            ("get", "/admin/payment-history"),
+            ("post", "/admin/payment/input"),
         )
 
         for method_name, path in protected_requests:
@@ -125,6 +128,9 @@ class AdminRouteTest(unittest.TestCase):
         self.assertIn("admin.view_guests", endpoints)
         self.assertIn("admin.download_guests", endpoints)
         self.assertIn("admin.delete_guests", endpoints)
+        self.assertIn("admin.admin_payment", endpoints)
+        self.assertIn("admin.admin_payment_history", endpoints)
+        self.assertIn("admin.input_payment", endpoints)
 
     # Fungsi untuk memastikan upload tamu admin menampilkan popup konfirmasi dengan daftar baris terhapus.
     def test_admin_upload_guests_shows_confirmation_with_removed_rows(self):
