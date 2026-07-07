@@ -444,8 +444,6 @@ def create_dashboard_blueprint(deps):
         return render_template(
             "user_dashboard.html",
             user=deps.get_user_display_name(current_user),
-            attendance_url=deps.build_guest_attendance_url(current_user),
-            attendance_qr_url=deps.build_guest_attendance_qr_url(current_user),
             is_client_active=is_client_active,
             guest_chart_modes=guest_chart_modes,
         )

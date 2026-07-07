@@ -14,6 +14,22 @@ def create_client_staff_blueprint(deps):
     def inactive_client_response():
         return "Akun client tidak aktif.", 403
 
+    # Fungsi untuk membuat context halaman Staff beserta URL publik per staff.
+    def build_client_staff_page_context(current_user, error=None, form_data=None):
+        context = deps.build_staff_page_context(current_user, error=error, form_data=form_data)
+        staff_members = context.get("staff_members", [])
+        context["staff_attendance_url_states"] = {
+            staff.id: {
+                "generated_at_text": deps.format_attendance_token_generated_at(staff.attendance_token_generated_at),
+            }
+            for staff in staff_members
+        }
+        context["staff_attendance_qr_urls"] = {
+            staff.id: deps.build_staff_attendance_qr_url(staff)
+            for staff in staff_members
+        }
+        return context
+
     # Fungsi untuk menampilkan dan menambahkan staff milik client.
     @client_staff_bp.route("/user/staff", methods=["GET", "POST"])
     @deps.login_required
@@ -36,7 +52,7 @@ def create_client_staff_blueprint(deps):
             error = deps.validate_staff_form(current_user, nama, no_hp)
 
             if error:
-                context = deps.build_staff_page_context(current_user, error=error, form_data=form_data)
+                context = build_client_staff_page_context(current_user, error=error, form_data=form_data)
                 return render_template("user_staff.html", **context), 400
 
             staff = deps.Staff()
@@ -56,7 +72,46 @@ def create_client_staff_blueprint(deps):
             )
             return deps.build_staff_redirect(message="Staff berhasil ditambahkan.")
 
-        return render_template("user_staff.html", **deps.build_staff_page_context(current_user))
+        return render_template("user_staff.html", **build_client_staff_page_context(current_user))
+
+    # Fungsi untuk generate URL publik dan QR Client milik staff.
+    @client_staff_bp.route("/user/staff/<int:staff_id>/attendance-url/generate", methods=["POST"])
+    @deps.login_required
+    @deps.role_required(deps.ROLE_USER)
+    # Route untuk membuat atau memperbarui URL publik staff.
+    def generate_staff_attendance_url(staff_id):
+        current_user = deps.get_current_user()
+        if not current_user:
+            return jsonify({"status": "error", "message": "Login diperlukan."}), 401
+        if not is_active_client(current_user):
+            return jsonify({"status": "error", "message": "Akun client tidak aktif."}), 403
+
+        staff = deps.Staff.query.filter_by(id=staff_id, owner_user_id=current_user.id).first()
+        if not staff:
+            return jsonify({"status": "error", "message": "Staff tidak ditemukan."}), 404
+        if staff.is_blocked:
+            return jsonify({"status": "error", "message": "Staff sedang diblokir."}), 403
+
+        attendance_url = deps.generate_staff_attendance_url(staff)
+        generated_at_text = deps.format_attendance_token_generated_at(staff.attendance_token_generated_at)
+        deps.log_activity_event(
+            "GENERATE_STAFF_ATTENDANCE_URL",
+            details={
+                "staff_id": staff.id,
+                "staff_name": staff.nama,
+                "staff_no_hp": staff.no_hp,
+                "owner_user_id": current_user.id,
+            },
+        )
+        return jsonify(
+            {
+                "status": "success",
+                "message": "URL publik sudah dibuat.",
+                "attendance_url": attendance_url,
+                "attendance_qr_url": deps.build_staff_attendance_qr_url(staff),
+                "generated_at": generated_at_text,
+            }
+        )
 
     # Fungsi untuk membuat URL random dan PIN login staff dari dashboard client.
     @client_staff_bp.route("/user/staff/<int:staff_id>/login", methods=["POST"])

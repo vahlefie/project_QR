@@ -42,12 +42,10 @@
                         <th>Email</th>
                         <th>Aktivasi</th>
                         <th>Action</th>
-                        <th>URL Client</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for account in users %}
-                    {% set attendance_url_state = attendance_url_states.get(account.id, {}) %}
                     <tr>
                         <td>{{ (pagination.page - 1) * per_page + loop.index }}</td>
                         <td>{{ account.username or 'N/A' }}</td>
@@ -110,34 +108,6 @@
                                     </button>
                                 </form>
                             </div>
-                        </td>
-                        <td>
-                            {% if account.aktivasi %}
-                                {% set attendance_qr_url = build_guest_attendance_qr_url(account) %}
-                                <div class="action-group">
-                                    <button
-                                        type="button"
-                                        class="secondary-button attendance-url-generate-button"
-                                        data-generate-url="{{ url_for('admin.generate_user_attendance_url', user_id=account.id) }}"
-                                        data-user-name="{{ account.nama or account.username }}"
-                                        data-last-generated="{{ attendance_url_state.get('generated_at_text', 'Belum pernah dibuat') }}"
-                                        data-qr-link-id="attendance-qr-link-{{ account.id }}"
-                                    >
-                                        Generate
-                                    </button>
-                                    <a
-                                        id="attendance-qr-link-{{ account.id }}"
-                                        class="button-link attendance-url-qr-button {% if not attendance_qr_url %}is-disabled{% endif %}"
-                                        {% if attendance_qr_url %}href="{{ attendance_qr_url }}"{% endif %}
-                                        download
-                                        aria-disabled="{{ 'false' if attendance_qr_url else 'true' }}"
-                                    >
-                                        QR Client
-                                    </a>
-                                </div>
-                            {% else %}
-                                N/A
-                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -402,21 +372,6 @@
     </div>
 </div>
 
-<div class="confirm-modal is-hidden" id="attendanceUrlModal" aria-hidden="true">
-    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="attendanceUrlTitle">
-        <h4 id="attendanceUrlTitle">Generate URL Client</h4>
-        <p class="modal-message attendance-url-message" id="attendanceUrlMessage"></p>
-        <div class="confirm-actions" id="attendanceUrlConfirmActions">
-            <button type="button" id="confirmAttendanceUrlButton">Ya</button>
-            <button type="button" class="danger-button" id="cancelAttendanceUrlButton">Batal</button>
-        </div>
-        <div class="confirm-actions is-hidden" id="attendanceUrlResultActions">
-            <button type="button" id="openAttendanceUrlButton">Buka</button>
-            <button type="button" class="danger-button" id="closeAttendanceUrlButton">Tutup</button>
-        </div>
-    </div>
-</div>
-
 <script src="{{ url_for('static', filename='indonesia_regions.js') }}"></script>
 <script>
     const saveConfirmModal = document.getElementById("saveConfirmModal");
@@ -438,21 +393,9 @@
     const cancelBlockPasswordButton = document.getElementById("cancelBlockPasswordButton");
     const confirmBlockWarningButton = document.getElementById("confirmBlockWarningButton");
     const confirmBlockButton = document.getElementById("confirmBlockButton");
-    const attendanceUrlModal = document.getElementById("attendanceUrlModal");
-    const attendanceUrlTitle = document.getElementById("attendanceUrlTitle");
-    const attendanceUrlMessage = document.getElementById("attendanceUrlMessage");
-    const attendanceUrlConfirmActions = document.getElementById("attendanceUrlConfirmActions");
-    const attendanceUrlResultActions = document.getElementById("attendanceUrlResultActions");
-    const confirmAttendanceUrlButton = document.getElementById("confirmAttendanceUrlButton");
-    const cancelAttendanceUrlButton = document.getElementById("cancelAttendanceUrlButton");
-    const openAttendanceUrlButton = document.getElementById("openAttendanceUrlButton");
-    const closeAttendanceUrlButton = document.getElementById("closeAttendanceUrlButton");
-    const attendanceUrlNeverGeneratedText = "Belum pernah dibuat";
     let pendingFormId = null;
     let pendingResetFormId = null;
     let pendingBlockFormId = null;
-    let pendingAttendanceButton = null;
-    let generatedAttendanceUrl = "";
     const regions = window.INDONESIA_REGIONS || {};
     const provinces = Object.keys(regions);
 
@@ -584,83 +527,6 @@
         openModal(blockConfirmModal);
     }
 
-    function showAttendanceUrlConfirm(button) {
-        pendingAttendanceButton = button;
-        generatedAttendanceUrl = "";
-        attendanceUrlTitle.textContent = "Generate URL Client";
-        attendanceUrlMessage.textContent = `Terakhir generate pada ${button.dataset.lastGenerated}.\nApakah akan membuat ulang URL?`;
-        attendanceUrlConfirmActions.classList.remove("is-hidden");
-        attendanceUrlResultActions.classList.add("is-hidden");
-        confirmAttendanceUrlButton.disabled = false;
-        openModal(attendanceUrlModal);
-    }
-
-    function generateNewAttendanceUrl(button) {
-        pendingAttendanceButton = button;
-        generatedAttendanceUrl = "";
-        generateAttendanceUrl();
-    }
-
-    function showAttendanceUrlResult(message, attendanceUrl = "") {
-        generatedAttendanceUrl = attendanceUrl;
-        attendanceUrlTitle.textContent = "URL Client";
-        attendanceUrlMessage.textContent = message;
-        attendanceUrlConfirmActions.classList.add("is-hidden");
-        attendanceUrlResultActions.classList.remove("is-hidden");
-        openAttendanceUrlButton.classList.toggle("is-hidden", !attendanceUrl);
-        openModal(attendanceUrlModal);
-    }
-
-    function updateAttendanceQrButton(button, attendanceQrUrl = "") {
-        if (!button || !button.dataset.qrLinkId) {
-            return;
-        }
-
-        const qrLink = document.getElementById(button.dataset.qrLinkId);
-        if (!qrLink) {
-            return;
-        }
-
-        if (attendanceQrUrl) {
-            qrLink.href = attendanceQrUrl;
-            qrLink.classList.remove("is-disabled");
-            qrLink.setAttribute("aria-disabled", "false");
-            qrLink.setAttribute("download", "");
-        } else {
-            qrLink.removeAttribute("href");
-            qrLink.classList.add("is-disabled");
-            qrLink.setAttribute("aria-disabled", "true");
-            qrLink.removeAttribute("download");
-        }
-    }
-
-    async function generateAttendanceUrl() {
-        if (!pendingAttendanceButton) {
-            return;
-        }
-
-        confirmAttendanceUrlButton.disabled = true;
-        try {
-            const response = await fetch(pendingAttendanceButton.dataset.generateUrl, {
-                method: "POST",
-                headers: { "Accept": "application/json" },
-            });
-            const payload = await response.json();
-            if (!response.ok || payload.status !== "success") {
-                showAttendanceUrlResult(payload.message || "URL publik gagal dibuat.");
-                return;
-            }
-
-            pendingAttendanceButton.dataset.lastGenerated = payload.generated_at || "Belum pernah dibuat";
-            updateAttendanceQrButton(pendingAttendanceButton, payload.attendance_qr_url || "");
-            showAttendanceUrlResult(payload.message || "URL publik sudah dibuat.", payload.attendance_url || "");
-        } catch (error) {
-            showAttendanceUrlResult("URL publik gagal dibuat.");
-        } finally {
-            confirmAttendanceUrlButton.disabled = false;
-        }
-    }
-
     document.querySelectorAll(".detail-user-button").forEach((button) => {
         button.addEventListener("click", () => {
             openModal(document.getElementById(button.dataset.modalId));
@@ -676,16 +542,6 @@
     document.querySelectorAll(".block-user-button").forEach((button) => {
         button.addEventListener("click", () => {
             showBlockModal(button.dataset.formId, button.dataset.action, button.dataset.userName);
-        });
-    });
-
-    document.querySelectorAll(".attendance-url-generate-button").forEach((button) => {
-        button.addEventListener("click", () => {
-            if (button.dataset.lastGenerated === attendanceUrlNeverGeneratedText) {
-                generateNewAttendanceUrl(button);
-                return;
-            }
-            showAttendanceUrlConfirm(button);
         });
     });
 
@@ -787,20 +643,6 @@
         }
     });
 
-    cancelAttendanceUrlButton.addEventListener("click", () => {
-        closeModal(attendanceUrlModal);
-    });
-
-    closeAttendanceUrlButton.addEventListener("click", () => {
-        closeModal(attendanceUrlModal);
-    });
-
-    attendanceUrlModal.addEventListener("click", (event) => {
-        if (event.target === attendanceUrlModal) {
-            closeModal(attendanceUrlModal);
-        }
-    });
-
     confirmSaveButton.addEventListener("click", () => {
         if (pendingFormId) {
             document.getElementById(pendingFormId).requestSubmit();
@@ -832,20 +674,5 @@
         form.requestSubmit();
     });
 
-    confirmAttendanceUrlButton.addEventListener("click", generateAttendanceUrl);
-
-    openAttendanceUrlButton.addEventListener("click", () => {
-        if (generatedAttendanceUrl) {
-            window.open(generatedAttendanceUrl, "_blank", "noopener");
-        }
-    });
-
-    document.querySelectorAll(".attendance-url-qr-button").forEach((link) => {
-        link.addEventListener("click", (event) => {
-            if (link.getAttribute("aria-disabled") === "true") {
-                event.preventDefault();
-            }
-        });
-    });
 </script>
 {% endblock %}

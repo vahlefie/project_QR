@@ -520,6 +520,11 @@ def get_attendance_owner_from_token(attendance_token):
     return attendance_service.get_attendance_owner_from_token(attendance_token)
 
 
+# Fungsi untuk membaca staff pemilik QR dari token halaman kehadiran
+def get_attendance_staff_from_token(attendance_token):
+    return attendance_service.get_attendance_staff_from_token(attendance_token)
+
+
 # Fungsi untuk memeriksa akses periode payment aktif client.
 def is_owner_in_active_billing_period(owner_user):
     return attendance_service.is_owner_in_active_billing_period(owner_user)
@@ -540,9 +545,24 @@ def build_guest_attendance_qr_url(owner_user):
     return attendance_service.build_guest_attendance_qr_url(owner_user)
 
 
+# Fungsi untuk membuat URL publik halaman verifikasi kehadiran milik staff.
+def build_staff_attendance_url(staff):
+    return attendance_service.build_staff_attendance_url(staff)
+
+
+# Fungsi untuk membuat URL download QR halaman verifikasi kehadiran milik staff.
+def build_staff_attendance_qr_url(staff):
+    return attendance_service.build_staff_attendance_qr_url(staff)
+
+
 # Fungsi untuk membuat ulang URL publik verifikasi kehadiran tamu
 def generate_guest_attendance_url(owner_user):
     return attendance_service.generate_guest_attendance_url(owner_user)
+
+
+# Fungsi untuk membuat ulang URL publik verifikasi kehadiran milik staff.
+def generate_staff_attendance_url(staff):
+    return attendance_service.generate_staff_attendance_url(staff)
 
 
 # Fungsi untuk memeriksa apakah user premium.
@@ -607,8 +627,8 @@ def verify_guest_qr_attendance(owner_user, raw_qr_value):
 
 
 # Fungsi untuk mengambil status request verifikasi kehadiran tamu publik.
-def get_guest_attendance_verification_status(owner_user, request_id):
-    return attendance_service.get_guest_attendance_verification_status(owner_user, request_id)
+def get_guest_attendance_verification_status(owner_user, request_id, target_staff=None):
+    return attendance_service.get_guest_attendance_verification_status(owner_user, request_id, target_staff)
 
 
 # Fungsi untuk mengambil popup request verifikasi kehadiran staff.
@@ -694,10 +714,10 @@ def find_attendance_guests(owner_user, no_hp):
 
 
 # Fungsi untuk memproses verifikasi nomor HP tamu dan mengisi waktu kehadiran
-def verify_guest_attendance(owner_user, raw_no_hp):
+def verify_guest_attendance(owner_user, raw_no_hp, target_staff=None):
     sync_logging_service_config()
     clean_phone_func = clean_guest_phone if guest_service.is_allowed_phone_input(raw_no_hp) else lambda _value: ""
-    return attendance_service.verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func)
+    return attendance_service.verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func, target_staff)
 
 
 # Fungsi untuk menyiapkan context halaman pembuatan password baru
@@ -1182,6 +1202,8 @@ def build_blueprint_dependencies():
         build_guest_qr_url=build_guest_qr_url,
         build_guest_short_qr_url=build_guest_short_qr_url,
         build_inactive_billing_period_message=build_inactive_billing_period_message,
+        build_staff_attendance_qr_url=build_staff_attendance_qr_url,
+        build_staff_attendance_url=build_staff_attendance_url,
         build_guest_query=build_guest_query,
         build_guest_table_redirect=build_guest_table_redirect,
         build_guest_upload_preview=build_guest_upload_preview,
@@ -1219,11 +1241,13 @@ def build_blueprint_dependencies():
         format_attendance_token_generated_at=format_attendance_token_generated_at,
         generate_client_username=generate_client_username,
         generate_guest_attendance_url=generate_guest_attendance_url,
+        generate_staff_attendance_url=generate_staff_attendance_url,
         ensure_final_guest_backup=ensure_final_guest_backup,
         get_accessible_guest=get_accessible_guest,
         get_accessible_staff_guest=get_accessible_staff_guest,
         get_active_staff_access=get_active_staff_access,
         get_attendance_owner_from_token=get_attendance_owner_from_token,
+        get_attendance_staff_from_token=get_attendance_staff_from_token,
         get_guest_attendance_verification_status=get_guest_attendance_verification_status,
         get_guest_from_qr_token=get_guest_from_qr_token,
         get_guest_from_short_qr_code=get_guest_from_short_qr_code,

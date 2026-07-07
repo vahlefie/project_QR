@@ -28,22 +28,8 @@
         <h3>Verifikasi Kehadiran</h3>
         {% if not is_client_active %}
             <p>N/A</p>
-        {% elif attendance_url %}
-            <p>Link publik untuk mencatat kehadiran tamu.</p>
-            <div class="dashboard-attendance-actions">
-                <div class="dashboard-attendance-open-row">
-                    <a class="button-link" href="{{ attendance_url }}" target="_blank" rel="noopener">Buka</a>
-                {% if attendance_qr_url %}
-                    <a
-                        class="button-link dashboard-attendance-qr"
-                        href="{{ attendance_qr_url }}"
-                        download
-                    >QR Client</a>
-                {% endif %}
-                </div>
-            </div>
         {% else %}
-            <p>URL publik belum dibuat oleh admin.</p>
+            <p>URL publik dan QR Client dikelola per staff melalui menu Staff.</p>
         {% endif %}
     </div>
 

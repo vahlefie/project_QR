@@ -125,6 +125,7 @@ class GuestShortUrl(db.Model):
 class AttendanceVerificationRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     owner_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True, nullable=False)
+    target_staff_id = db.Column(db.Integer, db.ForeignKey("staff.id"), index=True)
     guest_id = db.Column(db.Integer, db.ForeignKey("guests.id"), index=True)
     no_hp = db.Column(db.String(15))
     status = db.Column(db.String(20), default="pending", nullable=False, index=True)
@@ -136,6 +137,7 @@ class AttendanceVerificationRequest(db.Model):
     confirmed_by_staff_id = db.Column(db.Integer, db.ForeignKey("staff.id"))
     confirmed_by_staff_name = db.Column(db.String(35))
     owner = db.relationship("User")
+    target_staff = db.relationship("Staff", foreign_keys=[target_staff_id])
     guest = db.relationship("Guests")
     dismissals = db.relationship(
         "AttendanceVerificationDismissal",
@@ -200,6 +202,8 @@ class Staff(db.Model):
     is_blocked = db.Column(db.Boolean, default=False, nullable=False)
     blocked_at = db.Column(db.DateTime)
     block_reason = db.Column(db.String(100))
+    attendance_token_nonce = db.Column(db.String(64))
+    attendance_token_generated_at = db.Column(db.DateTime)
     owner = db.relationship("User", back_populates="staff_members")
     access_links = db.relationship("StaffAccess", back_populates="staff", lazy=True, cascade="all, delete-orphan")
     __table_args__ = (db.UniqueConstraint("owner_user_id", "no_hp", name="uq_staff_owner_no_hp"),)

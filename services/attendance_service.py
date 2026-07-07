@@ -7,6 +7,7 @@ import zlib
 
 import qrcode
 from qrcode.image.svg import SvgPathImage
+from sqlalchemy import or_
 from constants import (
     APP_TIMEZONE,
     ATTENDANCE_MONTH_ABBREVIATIONS,
@@ -82,19 +83,51 @@ def build_guest_attendance_token(owner_user):
 
 # Fungsi untuk mengambil pemilik kehadiran dari token.
 def get_attendance_owner_from_token(attendance_token):
+    staff = get_attendance_staff_from_token(attendance_token)
+    return staff.owner if staff else None
+
+
+# Fungsi untuk membuat token kehadiran publik milik staff.
+def build_staff_attendance_token(staff):
+    attendance_token_nonce = getattr(staff, "attendance_token_nonce", None)
+    if not staff or not attendance_token_nonce:
+        return ""
+    payload = {
+        "scope": "staff_attendance",
+        "owner_user_id": staff.owner_user_id,
+        "staff_id": staff.id,
+        "nonce": attendance_token_nonce,
+    }
+    return get_attendance_token_serializer().dumps(payload)
+
+
+# Fungsi untuk mengambil staff pemilik QR dari token kehadiran.
+def get_attendance_staff_from_token(attendance_token):
     try:
         payload = get_attendance_token_serializer().loads(attendance_token)
     except (BadSignature, SignatureExpired, TypeError):
         return None
 
+    if not isinstance(payload, dict) or payload.get("scope") != "staff_attendance":
+        return None
+
     owner_user_id = parse_int(payload.get("owner_user_id")) if isinstance(payload, dict) else None
+    staff_id = parse_int(payload.get("staff_id")) if isinstance(payload, dict) else None
     token_nonce = payload.get("nonce") if isinstance(payload, dict) else None
-    if owner_user_id is None:
+    if owner_user_id is None or staff_id is None:
         return None
-    owner_user = User.query.filter_by(id=owner_user_id, role=ROLE_USER).first()
-    if not owner_user or not token_nonce or token_nonce != owner_user.attendance_token_nonce:
+    staff = Staff.query.filter_by(id=staff_id, owner_user_id=owner_user_id).first()
+    owner_user = staff.owner if staff else None
+    if (
+        not staff
+        or staff.is_blocked
+        or not owner_user
+        or owner_user.role != ROLE_USER
+        or not token_nonce
+        or token_nonce != staff.attendance_token_nonce
+    ):
         return None
-    return owner_user
+    return staff
 
 
 # Fungsi untuk membuat URL kehadiran tamu.
@@ -116,6 +149,36 @@ def build_guest_attendance_qr_url(owner_user):
     if not is_owner_in_active_billing_period(owner_user):
         return ""
     attendance_token = build_guest_attendance_token(owner_user)
+    if not attendance_token:
+        return ""
+    return url_for(
+        "attendance.guest_attendance_qr_download",
+        attendance_token=attendance_token,
+        _external=True,
+    )
+
+
+# Fungsi untuk membuat URL kehadiran publik milik staff.
+def build_staff_attendance_url(staff):
+    owner_user = getattr(staff, "owner", None)
+    if not is_owner_in_active_billing_period(owner_user):
+        return ""
+    attendance_token = build_staff_attendance_token(staff)
+    if not attendance_token:
+        return ""
+    return url_for(
+        "attendance.guest_attendance_landing",
+        attendance_token=attendance_token,
+        _external=True,
+    )
+
+
+# Fungsi untuk membuat URL download QR kehadiran publik milik staff.
+def build_staff_attendance_qr_url(staff):
+    owner_user = getattr(staff, "owner", None)
+    if not is_owner_in_active_billing_period(owner_user):
+        return ""
+    attendance_token = build_staff_attendance_token(staff)
     if not attendance_token:
         return ""
     return url_for(
@@ -345,6 +408,14 @@ def generate_guest_attendance_url(owner_user):
     return build_guest_attendance_url(owner_user)
 
 
+# Fungsi untuk menghasilkan URL kehadiran tamu yang melekat pada staff.
+def generate_staff_attendance_url(staff):
+    staff.attendance_token_nonce = secrets.token_urlsafe(ATTENDANCE_TOKEN_NONCE_BYTES)
+    staff.attendance_token_generated_at = datetime.now(APP_TIMEZONE).replace(tzinfo=None, microsecond=0)
+    db.session.commit()
+    return build_staff_attendance_url(staff)
+
+
 # Fungsi untuk memformat waktu kehadiran.
 def format_attendance_time(value):
     if not value:
@@ -411,7 +482,7 @@ def expire_stale_attendance_requests(owner_user_id=None):
 
 
 # Fungsi untuk mencari request verifikasi yang masih aktif.
-def find_active_attendance_request(owner_user, no_hp=None, guest_id=None):
+def find_active_attendance_request(owner_user, no_hp=None, guest_id=None, target_staff=None):
     if not owner_user:
         return None
     expire_stale_attendance_requests(owner_user.id)
@@ -426,6 +497,8 @@ def find_active_attendance_request(owner_user, no_hp=None, guest_id=None):
         ),
         AttendanceVerificationRequest.expires_at > get_current_naive_datetime(),
     )
+    if target_staff is not None:
+        query = query.filter(AttendanceVerificationRequest.target_staff_id == target_staff.id)
     if guest_id is not None:
         query = query.filter(AttendanceVerificationRequest.guest_id == guest_id)
     elif no_hp:
@@ -448,7 +521,7 @@ def build_staff_notification_message(status, no_hp, guest=None):
 
 # Fungsi untuk membuat request verifikasi staff.
 def create_attendance_verification_request(
-    owner_user, guest=None, no_hp=None, status=ATTENDANCE_REQUEST_PENDING, source="phone"
+    owner_user, guest=None, no_hp=None, status=ATTENDANCE_REQUEST_PENDING, source="phone", target_staff=None
 ):
     now = get_current_naive_datetime()
     ttl_seconds = (
@@ -458,6 +531,7 @@ def create_attendance_verification_request(
     )
     verification_request = AttendanceVerificationRequest()
     verification_request.owner_user_id = owner_user.id
+    verification_request.target_staff_id = target_staff.id if target_staff else None
     verification_request.guest_id = guest.id if guest else None
     verification_request.no_hp = no_hp or getattr(guest, "no_hp", None)
     verification_request.status = status
@@ -466,6 +540,8 @@ def create_attendance_verification_request(
     verification_request.created_at = now
     verification_request.expires_at = now + timedelta(seconds=ttl_seconds)
     db.session.add(verification_request)
+    db.session.flush()
+    AttendanceVerificationDismissal.query.filter_by(request_id=verification_request.id).delete()
     db.session.commit()
     return verification_request
 
@@ -485,7 +561,7 @@ def build_phone_attendance_welcome_message(guest):
 
 
 # Fungsi untuk mengambil status request verifikasi tamu publik.
-def get_guest_attendance_verification_status(owner_user, request_id):
+def get_guest_attendance_verification_status(owner_user, request_id, target_staff=None):
     if not owner_user:
         return {
             "status": "not_found",
@@ -495,6 +571,11 @@ def get_guest_attendance_verification_status(owner_user, request_id):
     expire_stale_attendance_requests(owner_user.id)
     verification_request = db.session.get(AttendanceVerificationRequest, request_id)
     if not verification_request or verification_request.owner_user_id != owner_user.id:
+        return {
+            "status": "not_found",
+            "message": "Request verifikasi tidak ditemukan.",
+        }
+    if target_staff is not None and verification_request.target_staff_id != target_staff.id:
         return {
             "status": "not_found",
             "message": "Request verifikasi tidak ditemukan.",
@@ -569,12 +650,24 @@ def get_active_staff_ids_for_owner(owner_user_id):
 
 # Fungsi untuk mengecek apakah semua staff aktif sudah menolak request.
 def have_all_active_staff_rejected(verification_request):
+    if verification_request.target_staff_id:
+        return bool(
+            AttendanceVerificationDismissal.query.filter_by(
+                request_id=verification_request.id,
+                staff_id=verification_request.target_staff_id,
+            )
+            .filter(AttendanceVerificationDismissal.dismissed_at >= verification_request.created_at)
+            .first()
+        )
+
     active_staff_ids = set(get_active_staff_ids_for_owner(verification_request.owner_user_id))
     if not active_staff_ids:
         return False
     dismissed_staff_ids = {
         dismissal.staff_id
-        for dismissal in AttendanceVerificationDismissal.query.filter_by(request_id=verification_request.id).all()
+        for dismissal in AttendanceVerificationDismissal.query.filter_by(request_id=verification_request.id)
+        .filter(AttendanceVerificationDismissal.dismissed_at >= verification_request.created_at)
+        .all()
     }
     return active_staff_ids.issubset(dismissed_staff_ids)
 
@@ -594,6 +687,7 @@ def build_staff_notification_payload(verification_request):
 
     return {
         "id": verification_request.id,
+        "target_staff_id": verification_request.target_staff_id,
         "status": verification_request.status,
         "source": verification_request.source,
         "message": verification_request.message,
@@ -621,10 +715,24 @@ def get_staff_attendance_notification(staff):
 
     expire_stale_attendance_requests(staff.owner_user_id)
     dismissed_request_ids = [
-        dismissal.request_id for dismissal in AttendanceVerificationDismissal.query.filter_by(staff_id=staff.id).all()
+        dismissal.request_id
+        for dismissal in AttendanceVerificationDismissal.query.join(
+            AttendanceVerificationRequest,
+            AttendanceVerificationDismissal.request_id == AttendanceVerificationRequest.id,
+        )
+        .filter(
+            AttendanceVerificationDismissal.staff_id == staff.id,
+            AttendanceVerificationRequest.owner_user_id == staff.owner_user_id,
+            AttendanceVerificationDismissal.dismissed_at >= AttendanceVerificationRequest.created_at,
+        )
+        .all()
     ]
     query = AttendanceVerificationRequest.query.filter(
         AttendanceVerificationRequest.owner_user_id == staff.owner_user_id,
+        or_(
+            AttendanceVerificationRequest.target_staff_id == staff.id,
+            AttendanceVerificationRequest.target_staff_id.is_(None),
+        ),
         AttendanceVerificationRequest.status.in_(
             (
                 ATTENDANCE_REQUEST_PENDING,
@@ -645,11 +753,14 @@ def reject_attendance_verification_request(staff, request_id):
     verification_request = db.session.get(AttendanceVerificationRequest, request_id)
     if not staff or not verification_request or verification_request.owner_user_id != staff.owner_user_id:
         return {"status": "not_found", "message": "Request verifikasi tidak ditemukan."}
+    if verification_request.target_staff_id and verification_request.target_staff_id != staff.id:
+        return {"status": "not_found", "message": "Request verifikasi tidak ditemukan."}
 
     expire_stale_attendance_requests(staff.owner_user_id)
     if verification_request.status == ATTENDANCE_REQUEST_EXPIRED:
         return {"status": "expired", "message": "Request verifikasi sudah expired."}
 
+    dismissed_at = get_current_naive_datetime()
     existing_dismissal = AttendanceVerificationDismissal.query.filter_by(
         request_id=verification_request.id,
         staff_id=staff.id,
@@ -658,9 +769,11 @@ def reject_attendance_verification_request(staff, request_id):
         dismissal = AttendanceVerificationDismissal()
         dismissal.request_id = verification_request.id
         dismissal.staff_id = staff.id
-        dismissal.dismissed_at = get_current_naive_datetime()
+        dismissal.dismissed_at = dismissed_at
         db.session.add(dismissal)
         db.session.flush()
+    elif existing_dismissal.dismissed_at < verification_request.created_at:
+        existing_dismissal.dismissed_at = dismissed_at
 
     if have_all_active_staff_rejected(verification_request):
         verification_request.status = ATTENDANCE_REQUEST_EXPIRED
@@ -674,6 +787,8 @@ def reject_attendance_verification_request(staff, request_id):
 def confirm_attendance_verification_request(staff, request_id):
     verification_request = db.session.get(AttendanceVerificationRequest, request_id)
     if not staff or not verification_request or verification_request.owner_user_id != staff.owner_user_id:
+        return {"status": "not_found", "message": "Request verifikasi tidak ditemukan."}
+    if verification_request.target_staff_id and verification_request.target_staff_id != staff.id:
         return {"status": "not_found", "message": "Request verifikasi tidak ditemukan."}
 
     expire_stale_attendance_requests(staff.owner_user_id)
@@ -848,7 +963,7 @@ def verify_guest_qr_attendance(owner_user, raw_qr_value):
 
 
 # Fungsi untuk memverifikasi kehadiran tamu.
-def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func):
+def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func, target_staff=None):
     if not is_owner_in_active_billing_period(owner_user):
         return {
             "status": "inactive_period",
@@ -860,7 +975,7 @@ def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func):
     guests = find_attendance_guests(owner_user, normalized_no_hp)
 
     if not normalized_no_hp or not guests:
-        active_request = find_active_attendance_request(owner_user, no_hp=display_no_hp)
+        active_request = find_active_attendance_request(owner_user, no_hp=display_no_hp, target_staff=target_staff)
         if active_request:
             return build_pending_retry_response()
         verification_request = create_attendance_verification_request(
@@ -868,6 +983,7 @@ def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func):
             no_hp=display_no_hp,
             status=ATTENDANCE_REQUEST_NOT_REGISTERED,
             source="phone",
+            target_staff=target_staff,
         )
         log_attendance_event(
             "GUEST_ATTENDANCE_NOT_FOUND",
@@ -884,7 +1000,7 @@ def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func):
 
     guest_to_verify = next((guest for guest in guests if not guest.kehadiran), None)
     if not guest_to_verify:
-        active_request = find_active_attendance_request(owner_user, no_hp=normalized_no_hp)
+        active_request = find_active_attendance_request(owner_user, no_hp=normalized_no_hp, target_staff=target_staff)
         if active_request:
             return build_pending_retry_response()
         verification_request = create_attendance_verification_request(
@@ -893,6 +1009,7 @@ def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func):
             no_hp=normalized_no_hp,
             status=ATTENDANCE_REQUEST_ALREADY_VERIFIED,
             source="phone",
+            target_staff=target_staff,
         )
         log_attendance_event(
             "GUEST_ATTENDANCE_ALREADY_VERIFIED",
@@ -909,7 +1026,7 @@ def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func):
             "message": f"Nomor {normalized_no_hp} Sudah Terverifikasi.\nHarap Hubungi Staff Reservasi",
         }
 
-    active_request = find_active_attendance_request(owner_user, guest_id=guest_to_verify.id)
+    active_request = find_active_attendance_request(owner_user, guest_id=guest_to_verify.id, target_staff=target_staff)
     if active_request:
         return build_pending_retry_response()
 
@@ -919,13 +1036,17 @@ def verify_guest_attendance(owner_user, raw_no_hp, clean_phone_func):
         no_hp=normalized_no_hp,
         status=ATTENDANCE_REQUEST_PENDING,
         source="phone",
+        target_staff=target_staff,
     )
     log_attendance_event(
         "GUEST_ATTENDANCE_PENDING_STAFF_CONFIRMATION",
         owner_user=owner_user,
         guest=guest_to_verify,
         no_hp=normalized_no_hp,
-        details={"verification_request_id": verification_request.id},
+        details={
+            "verification_request_id": verification_request.id,
+            "target_staff_id": target_staff.id if target_staff else None,
+        },
     )
     return {
         "status": "pending_confirmation",

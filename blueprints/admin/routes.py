@@ -722,27 +722,14 @@ def create_admin_blueprint(deps):
         account = deps.User.query.filter_by(id=user_id, role=deps.ROLE_USER).first()
         if not account:
             return jsonify({"status": "not_found", "message": "Client tidak ditemukan."}), 404
-        if not deps.is_owner_in_active_billing_period(account):
-            return jsonify({"status": "inactive", "message": "Client tidak aktif."}), 403
-
-        attendance_url = deps.generate_guest_attendance_url(account)
-        generated_at_text = deps.format_attendance_token_generated_at(account.attendance_token_generated_at)
-        deps.log_activity_event(
-            "GENERATE_CLIENT_ATTENDANCE_URL",
-            details={
-                "target_user_id": account.id,
-                "target_username": account.username,
-                "generated_at": generated_at_text,
-            },
-        )
-        return jsonify(
-            {
-                "status": "success",
-                "message": "URL publik sudah dibuat.",
-                "attendance_url": attendance_url,
-                "attendance_qr_url": deps.build_guest_attendance_qr_url(account),
-                "generated_at": generated_at_text,
-            }
+        return (
+            jsonify(
+                {
+                    "status": "moved",
+                    "message": "URL publik sekarang dibuat per staff melalui menu Staff client.",
+                }
+            ),
+            410,
         )
 
     # Fungsi untuk mereset password user dan menandai wajib ganti password.

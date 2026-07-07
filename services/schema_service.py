@@ -215,6 +215,26 @@ def ensure_staff_schema():
         db.session.execute(text("ALTER TABLE staff ADD COLUMN block_reason VARCHAR(100)"))
         db.session.commit()
         staff_columns.add("block_reason")
+    if "attendance_token_nonce" not in staff_columns:
+        db.session.execute(text("ALTER TABLE staff ADD COLUMN attendance_token_nonce VARCHAR(64)"))
+        db.session.commit()
+        staff_columns.add("attendance_token_nonce")
+    if "attendance_token_generated_at" not in staff_columns:
+        db.session.execute(text("ALTER TABLE staff ADD COLUMN attendance_token_generated_at DATETIME"))
+        db.session.commit()
+        staff_columns.add("attendance_token_generated_at")
+
+
+# Fungsi untuk memastikan schema request verifikasi kehadiran.
+def ensure_attendance_verification_request_schema():
+    inspector = inspect(db.engine)
+    if "attendance_verification_request" not in inspector.get_table_names():
+        return
+
+    request_columns = {column["name"] for column in inspector.get_columns("attendance_verification_request")}
+    if "target_staff_id" not in request_columns:
+        db.session.execute(text("ALTER TABLE attendance_verification_request ADD COLUMN target_staff_id INTEGER"))
+        db.session.commit()
 
 
 # Fungsi untuk memastikan schema payment client.
@@ -403,6 +423,7 @@ def initialize_database():
     ensure_user_block_schema()
     ensure_user_attendance_token_schema()
     ensure_staff_schema()
+    ensure_attendance_verification_request_schema()
     ensure_billing_payment_schema()
     ensure_event_archive_schema()
     ensure_guests_user_schema()

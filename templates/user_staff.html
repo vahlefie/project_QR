@@ -45,6 +45,8 @@
 
 <div class="card staff-list-card">
     <h3>Daftar Staff</h3>
+    {% set staff_attendance_url_states = staff_attendance_url_states|default({}) %}
+    {% set staff_attendance_qr_urls = staff_attendance_qr_urls|default({}) %}
 
     {% if not staff_members %}
         <p>Belum ada staff.</p>
@@ -57,12 +59,15 @@
                         <th>Nomor HP</th>
                         <th>Nama</th>
                         <th>Action</th>
+                        <th>URL Client</th>
                         <th>Log</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for staff in staff_members %}
                     {% set staff_state = staff_states.get(staff.id, {}) %}
+                    {% set attendance_url_state = staff_attendance_url_states.get(staff.id, {}) %}
+                    {% set attendance_qr_url = staff_attendance_qr_urls.get(staff.id, '') %}
                     <tr data-staff-row="{{ staff.id }}">
                         <td>{{ loop.index }}</td>
                         <td>{{ staff.no_hp }}</td>
@@ -114,6 +119,32 @@
                                     </button>
                                 </form>
                             </div>
+                        </td>
+                        <td>
+                            {% if staff.is_blocked %}
+                                N/A
+                            {% else %}
+                                <div class="action-group">
+                                    <button
+                                        type="button"
+                                        class="secondary-button table-action-button staff-attendance-url-generate-button"
+                                        data-generate-url="{{ url_for('client_staff.generate_staff_attendance_url', staff_id=staff.id) }}"
+                                        data-staff-name="{{ staff.nama or staff.no_hp }}"
+                                        data-last-generated="{{ attendance_url_state.get('generated_at_text', 'Belum pernah dibuat') }}"
+                                        data-qr-link-id="staff-attendance-qr-link-{{ staff.id }}"
+                                    >
+                                        Generate
+                                    </button>
+                                    <a
+                                        id="staff-attendance-qr-link-{{ staff.id }}"
+                                        class="button-link table-action-button staff-attendance-qr-button {% if not attendance_qr_url %}is-disabled{% endif %}"
+                                        {% if attendance_qr_url %}href="{{ attendance_qr_url }}" download{% endif %}
+                                        aria-disabled="{{ 'false' if attendance_qr_url else 'true' }}"
+                                    >
+                                        QR Client
+                                    </a>
+                                </div>
+                            {% endif %}
                         </td>
                         <td>
                             <button
@@ -174,6 +205,28 @@
     </div>
 </div>
 
+<div
+    id="staffAttendanceUrlModal"
+    class="confirm-modal is-hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="staffAttendanceUrlTitle"
+>
+    <div class="confirm-dialog">
+        <h4 id="staffAttendanceUrlTitle">Generate URL Client</h4>
+        <p class="modal-message" id="staffAttendanceUrlMessage"></p>
+        <div class="confirm-actions" id="staffAttendanceUrlConfirmActions">
+            <button type="button" id="confirmStaffAttendanceUrlButton">Ya</button>
+            <button type="button" class="danger-button" id="cancelStaffAttendanceUrlButton">Batal</button>
+        </div>
+        <div class="confirm-actions is-hidden" id="staffAttendanceUrlResultActions">
+            <button type="button" id="openStaffAttendanceUrlButton">Buka</button>
+            <button type="button" class="danger-button" id="closeStaffAttendanceUrlButton">Tutup</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const staffForm = document.getElementById("staffForm");
 const staffPhoneLocalInput = document.getElementById("staffPhoneLocalInput");
@@ -187,8 +240,20 @@ const staffLogTitle = document.getElementById("staffLogTitle");
 const staffLogContent = document.getElementById("staffLogContent");
 const downloadStaffLog = document.getElementById("downloadStaffLog");
 const closeStaffLog = document.getElementById("closeStaffLog");
+const staffAttendanceUrlModal = document.getElementById("staffAttendanceUrlModal");
+const staffAttendanceUrlTitle = document.getElementById("staffAttendanceUrlTitle");
+const staffAttendanceUrlMessage = document.getElementById("staffAttendanceUrlMessage");
+const staffAttendanceUrlConfirmActions = document.getElementById("staffAttendanceUrlConfirmActions");
+const staffAttendanceUrlResultActions = document.getElementById("staffAttendanceUrlResultActions");
+const confirmStaffAttendanceUrlButton = document.getElementById("confirmStaffAttendanceUrlButton");
+const cancelStaffAttendanceUrlButton = document.getElementById("cancelStaffAttendanceUrlButton");
+const openStaffAttendanceUrlButton = document.getElementById("openStaffAttendanceUrlButton");
+const closeStaffAttendanceUrlButton = document.getElementById("closeStaffAttendanceUrlButton");
 const staffStatusUrl = "{{ url_for('client_staff.user_staff_status') }}";
+const attendanceUrlNeverGeneratedText = "Belum pernah dibuat";
 let activeStaffLogPayload = null;
+let pendingStaffAttendanceButton = null;
+let generatedStaffAttendanceUrl = "";
 
 staffForm.addEventListener("submit", () => {
     let localNumber = staffPhoneLocalInput.value.trim();
@@ -249,6 +314,117 @@ cancelBlockStaff.addEventListener("click", closeBlockModal);
 blockStaffModal.addEventListener("click", (event) => {
     if (event.target === blockStaffModal) {
         closeBlockModal();
+    }
+});
+
+const openStaffAttendanceUrlModal = () => {
+    staffAttendanceUrlModal.classList.remove("is-hidden");
+    staffAttendanceUrlModal.setAttribute("aria-hidden", "false");
+};
+
+const closeStaffAttendanceUrlModal = () => {
+    staffAttendanceUrlModal.classList.add("is-hidden");
+    staffAttendanceUrlModal.setAttribute("aria-hidden", "true");
+};
+
+const updateStaffAttendanceQrButton = (button, attendanceQrUrl = "") => {
+    if (!button || !button.dataset.qrLinkId) {
+        return;
+    }
+
+    const qrLink = document.getElementById(button.dataset.qrLinkId);
+    if (!qrLink) {
+        return;
+    }
+
+    if (attendanceQrUrl) {
+        qrLink.href = attendanceQrUrl;
+        qrLink.classList.remove("is-disabled");
+        qrLink.setAttribute("aria-disabled", "false");
+        qrLink.setAttribute("download", "");
+    } else {
+        qrLink.removeAttribute("href");
+        qrLink.classList.add("is-disabled");
+        qrLink.setAttribute("aria-disabled", "true");
+        qrLink.removeAttribute("download");
+    }
+};
+
+const showStaffAttendanceUrlResult = (message, attendanceUrl = "") => {
+    generatedStaffAttendanceUrl = attendanceUrl;
+    staffAttendanceUrlTitle.textContent = "URL Client";
+    staffAttendanceUrlMessage.textContent = message;
+    staffAttendanceUrlConfirmActions.classList.add("is-hidden");
+    staffAttendanceUrlResultActions.classList.remove("is-hidden");
+    openStaffAttendanceUrlButton.classList.toggle("is-hidden", !attendanceUrl);
+    openStaffAttendanceUrlModal();
+};
+
+const generateStaffAttendanceUrl = async () => {
+    if (!pendingStaffAttendanceButton) {
+        return;
+    }
+
+    confirmStaffAttendanceUrlButton.disabled = true;
+    try {
+        const response = await fetch(pendingStaffAttendanceButton.dataset.generateUrl, {
+            method: "POST",
+            headers: { "Accept": "application/json" },
+        });
+        const payload = await response.json();
+        if (!response.ok || payload.status !== "success") {
+            showStaffAttendanceUrlResult(payload.message || "URL publik gagal dibuat.");
+            return;
+        }
+
+        pendingStaffAttendanceButton.dataset.lastGenerated = payload.generated_at || attendanceUrlNeverGeneratedText;
+        updateStaffAttendanceQrButton(pendingStaffAttendanceButton, payload.attendance_qr_url || "");
+        showStaffAttendanceUrlResult(payload.message || "URL publik sudah dibuat.", payload.attendance_url || "");
+    } catch (error) {
+        showStaffAttendanceUrlResult("URL publik gagal dibuat.");
+    } finally {
+        confirmStaffAttendanceUrlButton.disabled = false;
+    }
+};
+
+const showStaffAttendanceUrlConfirm = (button) => {
+    pendingStaffAttendanceButton = button;
+    generatedStaffAttendanceUrl = "";
+    staffAttendanceUrlTitle.textContent = "Generate URL Client";
+    staffAttendanceUrlMessage.textContent = `Terakhir generate pada ${button.dataset.lastGenerated}.\nApakah akan membuat ulang URL?`;
+    staffAttendanceUrlConfirmActions.classList.remove("is-hidden");
+    staffAttendanceUrlResultActions.classList.add("is-hidden");
+    confirmStaffAttendanceUrlButton.disabled = false;
+    openStaffAttendanceUrlModal();
+};
+
+const generateNewStaffAttendanceUrl = (button) => {
+    pendingStaffAttendanceButton = button;
+    generatedStaffAttendanceUrl = "";
+    generateStaffAttendanceUrl();
+};
+
+document.querySelectorAll(".staff-attendance-url-generate-button").forEach((button) => {
+    button.addEventListener("click", () => {
+        if (button.dataset.lastGenerated === attendanceUrlNeverGeneratedText) {
+            generateNewStaffAttendanceUrl(button);
+            return;
+        }
+        showStaffAttendanceUrlConfirm(button);
+    });
+});
+
+confirmStaffAttendanceUrlButton.addEventListener("click", generateStaffAttendanceUrl);
+cancelStaffAttendanceUrlButton.addEventListener("click", closeStaffAttendanceUrlModal);
+closeStaffAttendanceUrlButton.addEventListener("click", closeStaffAttendanceUrlModal);
+openStaffAttendanceUrlButton.addEventListener("click", () => {
+    if (generatedStaffAttendanceUrl) {
+        window.open(generatedStaffAttendanceUrl, "_blank", "noopener");
+    }
+});
+staffAttendanceUrlModal.addEventListener("click", (event) => {
+    if (event.target === staffAttendanceUrlModal) {
+        closeStaffAttendanceUrlModal();
     }
 });
 

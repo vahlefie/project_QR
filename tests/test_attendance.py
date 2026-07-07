@@ -51,7 +51,6 @@ class AttendanceRouteTest(unittest.TestCase):
             owner.email = f"{username}@example.com"
             owner.no_hp = no_hp
             owner.role = app_module.ROLE_USER
-            owner.attendance_token_nonce = f"nonce-{username}"
             app_module.db.session.add(owner)
             app_module.db.session.commit()
 
@@ -77,9 +76,17 @@ class AttendanceRouteTest(unittest.TestCase):
             app_module.db.session.add(guest)
             app_module.db.session.commit()
 
-            token = app_module.build_guest_attendance_token(owner)
+            staff = Staff()
+            staff.owner_user_id = owner.id
+            staff.nama = f"Staff {username}"
+            staff.no_hp = str(no_hp + 100000)
+            staff.attendance_token_nonce = f"staff-nonce-{username}"
+            app_module.db.session.add(staff)
+            app_module.db.session.commit()
+
+            token = app_module.attendance_service.build_staff_attendance_token(staff)
             self.created_usernames.append(username)
-            return owner.id, guest.id, token
+            return owner.id, guest.id, token, staff.id
 
     # Fungsi untuk menguji landing page menolak token kehadiran yang tidak valid.
     def test_attendance_landing_rejects_invalid_token(self):
@@ -116,7 +123,7 @@ class AttendanceRouteTest(unittest.TestCase):
 
     # Fungsi untuk memastikan download QR Client PNG berisi URL halaman verifikasi kehadiran.
     def test_attendance_client_qr_download_contains_attendance_landing_url(self):
-        owner_id, _, attendance_token = self.create_active_attendance_owner("attendance_qr_client", 628120040004)
+        _, _, attendance_token, staff_id = self.create_active_attendance_owner("attendance_qr_client", 628120040004)
         captured = {}
         original_build_guest_attendance_qr_png = app_module.attendance_service.build_guest_attendance_qr_png
         try:
@@ -134,7 +141,7 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, "image/png")
         self.assertEqual(response.get_data()[:8], b"\x89PNG\r\n\x1a\n")
-        self.assertEqual(response.headers["Content-Disposition"], f'attachment; filename="qr-client-{owner_id}.png"')
+        self.assertEqual(response.headers["Content-Disposition"], f'attachment; filename="qr-staff-{staff_id}.png"')
         self.assertIn(f"/kehadiran/{attendance_token}", captured["value"])
         self.assertNotIn("/qr.png", captured["value"])
 
@@ -144,7 +151,7 @@ class AttendanceRouteTest(unittest.TestCase):
 
     # Fungsi untuk memastikan halaman tamu menunggu staff lalu memuat hasil sukses.
     def test_attendance_guest_waits_for_staff_confirmation_result_page(self):
-        owner_id, _, attendance_token = self.create_active_attendance_owner("attendance_wait_client", 628120040001)
+        _, _, attendance_token, staff_id = self.create_active_attendance_owner("attendance_wait_client", 628120040001)
 
         response = self.client.post(
             f"/kehadiran/{attendance_token}/verify",
@@ -164,12 +171,7 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertEqual(pending_status.json["message"], "Harap Tunggu Sebentar, Data Sedang Diverifikasi")
 
         with app_module.app.app_context():
-            staff = Staff()
-            staff.owner_user_id = owner_id
-            staff.nama = "Staff Attendance"
-            staff.no_hp = "6281299991111"
-            app_module.db.session.add(staff)
-            app_module.db.session.commit()
+            staff = app_module.db.session.get(Staff, staff_id)
             confirm_result = app_module.confirm_attendance_verification_request(
                 staff,
                 response.json["verification_request_id"],
@@ -189,9 +191,41 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertNotIn("Request ID", result_html)
         self.assertNotIn("Kode pemeriksaan", result_html)
 
+    # Fungsi untuk memastikan request dari QR staff hanya muncul pada staff pemilik QR.
+    def test_attendance_staff_qr_notification_is_targeted_to_owner_staff(self):
+        owner_id, _, attendance_token, staff_id = self.create_active_attendance_owner(
+            "attendance_target_staff_client",
+            628120040005,
+        )
+
+        response = self.client.post(
+            f"/kehadiran/{attendance_token}/verify",
+            json={"no_hp": "081234567890"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["status"], "pending_confirmation")
+
+        with app_module.app.app_context():
+            target_staff = app_module.db.session.get(Staff, staff_id)
+            other_staff = Staff()
+            other_staff.owner_user_id = owner_id
+            other_staff.nama = "Staff Other"
+            other_staff.no_hp = "6281299993333"
+            app_module.db.session.add(other_staff)
+            app_module.db.session.commit()
+
+            target_notification = app_module.get_staff_attendance_notification(target_staff)
+            other_notification = app_module.get_staff_attendance_notification(other_staff)
+
+        self.assertIsNotNone(target_notification)
+        self.assertEqual(target_notification["id"], response.json["verification_request_id"])
+        self.assertEqual(target_notification["target_staff_id"], staff_id)
+        self.assertIsNone(other_notification)
+
     # Fungsi untuk memastikan request yang expired tampil sebagai waktu habis pada halaman tamu.
     def test_attendance_guest_request_expired_result_page(self):
-        _, _, attendance_token = self.create_active_attendance_owner("attendance_expired_client", 628120040002)
+        _, _, attendance_token, _ = self.create_active_attendance_owner("attendance_expired_client", 628120040002)
 
         response = self.client.post(
             f"/kehadiran/{attendance_token}/verify",
@@ -225,7 +259,7 @@ class AttendanceRouteTest(unittest.TestCase):
 
     # Fungsi untuk memastikan semua staff yang menutup request memakai pesan gagal verifikasi khusus.
     def test_attendance_guest_all_staff_closed_request_result_page(self):
-        owner_id, _, attendance_token = self.create_active_attendance_owner("attendance_rejected_client", 628120040003)
+        _, _, attendance_token, staff_id = self.create_active_attendance_owner("attendance_rejected_client", 628120040003)
 
         response = self.client.post(
             f"/kehadiran/{attendance_token}/verify",
@@ -236,22 +270,11 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertEqual(response.json["status"], "pending_confirmation")
 
         with app_module.app.app_context():
-            staff = Staff()
-            staff.owner_user_id = owner_id
-            staff.nama = "Staff Reject"
-            staff.no_hp = "6281299992222"
-            app_module.db.session.add(staff)
-            app_module.db.session.commit()
-
-            original_get_active_staff_ids = app_module.attendance_service.get_active_staff_ids_for_owner
-            app_module.attendance_service.get_active_staff_ids_for_owner = lambda _owner_id: [staff.id]
-            try:
-                reject_result = app_module.reject_attendance_verification_request(
-                    staff,
-                    response.json["verification_request_id"],
-                )
-            finally:
-                app_module.attendance_service.get_active_staff_ids_for_owner = original_get_active_staff_ids
+            staff = app_module.db.session.get(Staff, staff_id)
+            reject_result = app_module.reject_attendance_verification_request(
+                staff,
+                response.json["verification_request_id"],
+            )
 
         self.assertEqual(reject_result["status"], "rejected")
 

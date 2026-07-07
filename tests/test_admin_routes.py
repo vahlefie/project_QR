@@ -371,8 +371,8 @@ class AdminRouteTest(unittest.TestCase):
             User.query.filter_by(username="super_admin_route_test").delete()
             app_module.db.session.commit()
 
-    # Fungsi untuk memastikan template daftar client memiliki kolom generate URL client.
-    def test_users_template_has_client_url_column(self):
+    # Fungsi untuk memastikan template daftar client tidak lagi memiliki kolom generate URL client.
+    def test_users_template_hides_client_url_column(self):
         account = User()
         account.id = 99
         account.username = "clienturl"
@@ -407,14 +407,12 @@ class AdminRouteTest(unittest.TestCase):
                 latest_payment_package_names={99: None},
             )
 
-        self.assertIn("URL Client", html)
-        self.assertIn("Generate", html)
-        self.assertIn("QR Client", html)
-        self.assertIn("/admin/users/99/attendance-url/generate", html)
-        self.assertIn('aria-disabled="true"', html)
+        self.assertNotIn("URL Client", html)
+        self.assertNotIn("QR Client", html)
+        self.assertNotIn("/admin/users/99/attendance-url/generate", html)
 
-    # Fungsi untuk memastikan admin bisa generate URL client dan token lama menjadi invalid.
-    def test_generate_user_attendance_url_refreshes_client_token(self):
+    # Fungsi untuk memastikan endpoint generate URL client lama sudah dipindahkan ke Staff.
+    def test_generate_user_attendance_url_is_moved_to_staff(self):
         self.login_as_admin()
         with app_module.app.app_context():
             User.query.filter_by(username="attendance_generate_client").delete()
@@ -428,37 +426,19 @@ class AdminRouteTest(unittest.TestCase):
             client.attendance_token_nonce = "old-nonce"
             app_module.db.session.add(client)
             app_module.db.session.commit()
-            payment = BillingPayment()
-            payment.user_id = client.id
-            payment.payment_date = date.today()
-            payment.amount = 100000
-            payment.package_name = app_module.PACKAGE_PREMIUM
-            payment.period_start = date.today() - timedelta(days=1)
-            payment.period_end = date.today() + timedelta(days=1)
-            payment.event_name = "Generate URL Event"
-            payment.status = "verified"
-            app_module.db.session.add(payment)
-            app_module.db.session.commit()
-            old_token = app_module.build_guest_attendance_token(client)
             client_id = client.id
 
         response = self.client.post(f"/admin/users/{client_id}/attendance-url/generate")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 410)
         payload = response.get_json()
-        self.assertEqual(payload["status"], "success")
-        self.assertEqual(payload["message"], "URL publik sudah dibuat.")
-        self.assertIn("/kehadiran/", payload["attendance_url"])
-        self.assertIn("/kehadiran/", payload["attendance_qr_url"])
-        self.assertIn("/qr.png", payload["attendance_qr_url"])
+        self.assertEqual(payload["status"], "moved")
+        self.assertIn("menu Staff", payload["message"])
 
         with app_module.app.app_context():
             client = app_module.db.session.get(User, client_id)
-            self.assertIsNotNone(client.attendance_token_nonce)
-            self.assertNotEqual(client.attendance_token_nonce, "old-nonce")
-            self.assertIsNotNone(client.attendance_token_generated_at)
-            self.assertIsNone(app_module.get_attendance_owner_from_token(old_token))
-            BillingPayment.query.filter_by(user_id=client_id).delete()
+            self.assertEqual(client.attendance_token_nonce, "old-nonce")
+            self.assertIsNone(client.attendance_token_generated_at)
             app_module.db.session.delete(client)
             User.query.filter_by(username="admin_route_test").delete()
             app_module.db.session.commit()

@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import app as app_module
-from models import User
+from models import Staff, User
 from services import attendance_service, logging_service
 
 
@@ -50,6 +50,40 @@ class AttendanceServiceTest(unittest.TestCase):
             token = attendance_service.build_guest_attendance_token(owner)
 
         self.assertEqual(token, "")
+
+    # Fungsi untuk memastikan token attendance staff resolve ke staff dan owner client.
+    def test_build_staff_attendance_token_resolves_staff_and_owner(self):
+        with app_module.app.app_context():
+            User.query.filter_by(username="staff_attendance_token_owner").delete()
+            app_module.db.session.commit()
+
+            owner = User()
+            owner.username = "staff_attendance_token_owner"
+            owner.nama = "Staff Attendance Token Owner"
+            owner.email = "staff_attendance_token_owner@example.com"
+            owner.no_hp = 628120050001
+            owner.role = app_module.ROLE_USER
+            app_module.db.session.add(owner)
+            app_module.db.session.commit()
+
+            staff = Staff()
+            staff.owner_user_id = owner.id
+            staff.nama = "Staff Token"
+            staff.no_hp = "628120050002"
+            staff.attendance_token_nonce = "staff-token-nonce"
+            app_module.db.session.add(staff)
+            app_module.db.session.commit()
+
+            token = attendance_service.build_staff_attendance_token(staff)
+            resolved_staff = attendance_service.get_attendance_staff_from_token(token)
+            resolved_owner = attendance_service.get_attendance_owner_from_token(token)
+
+            self.assertEqual(resolved_staff.id, staff.id)
+            self.assertEqual(resolved_owner.id, owner.id)
+
+            app_module.db.session.delete(staff)
+            app_module.db.session.delete(owner)
+            app_module.db.session.commit()
 
     # Fungsi untuk memastikan QR Client PNG memakai format gambar besar yang siap cetak.
     def test_build_guest_attendance_qr_png_creates_large_png(self):

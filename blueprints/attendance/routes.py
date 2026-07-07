@@ -48,7 +48,8 @@ def create_attendance_blueprint(deps):
     @attendance_bp.route("/kehadiran/<attendance_token>")
     # Route untuk menampilkan halaman verifikasi kehadiran publik.
     def guest_attendance_landing(attendance_token):
-        owner_user = deps.get_attendance_owner_from_token(attendance_token)
+        target_staff = deps.get_attendance_staff_from_token(attendance_token)
+        owner_user = target_staff.owner if target_staff else None
         if not owner_user:
             deps.log_attendance_event(
                 "GUEST_ATTENDANCE_INVALID_LINK",
@@ -107,7 +108,8 @@ def create_attendance_blueprint(deps):
     @attendance_bp.route("/kehadiran/<attendance_token>/qr.png")
     # Route untuk mengunduh QR PNG yang berisi URL halaman verifikasi kehadiran.
     def guest_attendance_qr_download(attendance_token):
-        owner_user = deps.get_attendance_owner_from_token(attendance_token)
+        target_staff = deps.get_attendance_staff_from_token(attendance_token)
+        owner_user = target_staff.owner if target_staff else None
         if not owner_user:
             return Response("Link verifikasi tidak valid.", status=404, mimetype="text/plain")
         if not deps.is_owner_in_active_billing_period(owner_user):
@@ -119,7 +121,7 @@ def create_attendance_blueprint(deps):
             _external=True,
         )
         response = Response(deps.build_guest_attendance_qr_png(attendance_url), mimetype="image/png")
-        response.headers["Content-Disposition"] = f'attachment; filename="qr-client-{owner_user.id}.png"'
+        response.headers["Content-Disposition"] = f'attachment; filename="qr-staff-{target_staff.id}.png"'
         response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -127,7 +129,8 @@ def create_attendance_blueprint(deps):
     @attendance_bp.route("/kehadiran/<attendance_token>/verify", methods=["POST"])
     # Route untuk memproses verifikasi kehadiran tamu.
     def verify_guest_attendance_route(attendance_token):
-        owner_user = deps.get_attendance_owner_from_token(attendance_token)
+        target_staff = deps.get_attendance_staff_from_token(attendance_token)
+        owner_user = target_staff.owner if target_staff else None
         if not owner_user:
             deps.log_attendance_event(
                 "GUEST_ATTENDANCE_INVALID_LINK",
@@ -169,7 +172,7 @@ def create_attendance_blueprint(deps):
 
         try:
             payload = request.get_json(silent=True) or request.form
-            result = deps.verify_guest_attendance(owner_user, payload.get("no_hp", ""))
+            result = deps.verify_guest_attendance(owner_user, payload.get("no_hp", ""), target_staff=target_staff)
             attach_attendance_request_urls(result, attendance_token)
             result["request_id"] = deps.get_request_id()
             result["client_request_id"] = request.headers.get("X-Client-Request-ID")
@@ -200,7 +203,8 @@ def create_attendance_blueprint(deps):
     @attendance_bp.route("/kehadiran/<attendance_token>/request/<int:request_id>/status")
     # Route untuk mengambil status request verifikasi tamu.
     def guest_attendance_request_status(attendance_token, request_id):
-        owner_user = deps.get_attendance_owner_from_token(attendance_token)
+        target_staff = deps.get_attendance_staff_from_token(attendance_token)
+        owner_user = target_staff.owner if target_staff else None
         if not owner_user:
             return jsonify({"status": "invalid_link", "message": "Link verifikasi tidak valid."}), 404
         if not deps.is_owner_in_active_billing_period(owner_user):
@@ -214,7 +218,7 @@ def create_attendance_blueprint(deps):
                 403,
             )
 
-        payload = deps.get_guest_attendance_verification_status(owner_user, request_id)
+        payload = deps.get_guest_attendance_verification_status(owner_user, request_id, target_staff)
         attach_attendance_request_urls(payload, attendance_token)
         status_code = 404 if payload.get("status") == "not_found" else 200
         return jsonify(payload), status_code
@@ -223,7 +227,8 @@ def create_attendance_blueprint(deps):
     @attendance_bp.route("/kehadiran/<attendance_token>/request/<int:request_id>/result")
     # Route untuk menampilkan hasil request verifikasi tamu tanpa popup.
     def guest_attendance_request_result(attendance_token, request_id):
-        owner_user = deps.get_attendance_owner_from_token(attendance_token)
+        target_staff = deps.get_attendance_staff_from_token(attendance_token)
+        owner_user = target_staff.owner if target_staff else None
         if not owner_user:
             return (
                 render_template(
@@ -249,7 +254,7 @@ def create_attendance_blueprint(deps):
                 403,
             )
 
-        payload = deps.get_guest_attendance_verification_status(owner_user, request_id)
+        payload = deps.get_guest_attendance_verification_status(owner_user, request_id, target_staff)
         status_code = 404 if payload.get("status") == "not_found" else 200
         return render_guest_attendance_request_result(owner_user, attendance_token, payload, status_code)
 
