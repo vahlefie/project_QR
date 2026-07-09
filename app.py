@@ -666,7 +666,7 @@ def attendance_time_filter(value):
 def rupiah_filter(value):
     try:
         amount = int(value or 0)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         amount = 0
     return f"Rp {amount:,}".replace(",", ".")
 
