@@ -66,6 +66,78 @@ class GuestServiceTest(unittest.TestCase):
             },
         )
 
+    # Fungsi untuk memastikan sumber penambah tamu tersimpan pada manual, upload, dan replace.
+    def test_guest_added_by_is_saved_from_actor_label(self):
+        with app_module.app.app_context():
+            existing_client = User.query.filter_by(username="added_by_client").first()
+            if existing_client:
+                Guests.query.filter_by(user_id=existing_client.id).delete()
+                app_module.db.session.delete(existing_client)
+            User.query.filter_by(no_hp=6281200044103).delete()
+            app_module.db.session.commit()
+
+            client = User()
+            client.username = "added_by_client"
+            client.nama = "Added By Client"
+            client.email = "added_by_client@example.com"
+            client.no_hp = 6281200044103
+            client.role = app_module.ROLE_USER
+            app_module.db.session.add(client)
+            app_module.db.session.commit()
+
+            manual_data = guest_service.build_manual_guest_data(
+                {
+                    "nama": "tamu manual",
+                    "no_hp": "0812345678",
+                    "email": "",
+                    "status": "Reguler",
+                },
+                client,
+            )
+            self.assertEqual(manual_data["added_by"], "added_by_client")
+
+            rows = [
+                {
+                    "no": 1,
+                    "nama": "Tamu Upload",
+                    "no_hp": "62812345678",
+                    "email": None,
+                    "status": "Reguler",
+                }
+            ]
+            guest_service.save_guest_rows(client, rows, include_duplicates=True)
+            guest = Guests.query.filter_by(user_id=client.id, no_hp="62812345678").first()
+
+            self.assertIsNotNone(guest)
+            self.assertEqual(guest.added_by, "added_by_client")
+            self.assertEqual(
+                guest_service.build_staff_guest_added_by(SimpleNamespace(nama="Staff Input", no_hp="62812999")),
+                "Staff Input",
+            )
+
+            guest_service.replace_guest_rows(
+                client,
+                [
+                    {
+                        "no": 1,
+                        "nama": "Tamu Upload Baru",
+                        "no_hp": "62812345678",
+                        "email": None,
+                        "status": "VIP",
+                    }
+                ],
+                added_by="Staff Input",
+            )
+            app_module.db.session.refresh(guest)
+
+            self.assertEqual(guest.nama, "Tamu Upload Baru")
+            self.assertEqual(guest.status, "VIP")
+            self.assertEqual(guest.added_by, "Staff Input")
+
+            Guests.query.filter_by(user_id=client.id).delete()
+            app_module.db.session.delete(client)
+            app_module.db.session.commit()
+
     # Fungsi untuk memastikan nama sama tidak dianggap duplicate saat preview upload.
     def test_build_guest_upload_preview_ignores_matching_guest_name(self):
         with app_module.app.app_context():

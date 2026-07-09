@@ -9,6 +9,7 @@ from constants import (
     ALLOWED_EXCEL_EXTENSIONS,
     APP_TIMEZONE,
     DEFAULT_GUEST_STATUS,
+    GUEST_ADDED_BY_MAX_LENGTH,
     GUEST_EMAIL_MAX_LENGTH,
     GUEST_EXCEL_COLUMNS,
     GUEST_NAME_CLEANUP_PATTERN,
@@ -28,7 +29,7 @@ from sqlalchemy import func
 def parse_int(value, default=None):
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
@@ -133,7 +134,7 @@ def get_optional_integer(row, column_name):
 
     try:
         return int(float(value))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -244,6 +245,26 @@ def clean_guest_status(value):
 GUEST_DUPLICATE_MATCH_FIELDS = ("no_hp", "email")
 
 
+# Fungsi untuk membersihkan label penambah data tamu.
+def clean_guest_added_by(value):
+    text_value = str(value or "").strip()
+    return text_value[:GUEST_ADDED_BY_MAX_LENGTH] or None
+
+
+# Fungsi untuk mengambil label penambah tamu dari akun client pemilik data.
+def build_owner_guest_added_by(owner_user):
+    if not owner_user:
+        return None
+    return clean_guest_added_by(getattr(owner_user, "username", "") or getattr(owner_user, "nama", ""))
+
+
+# Fungsi untuk mengambil label penambah tamu dari akun staff.
+def build_staff_guest_added_by(staff):
+    if not staff:
+        return None
+    return clean_guest_added_by(getattr(staff, "nama", "") or getattr(staff, "no_hp", ""))
+
+
 # Fungsi untuk mengambil nilai pembanding tamu.
 def get_guest_match_value(field_name, value):
     if field_name == "no_hp":
@@ -345,12 +366,15 @@ def guest_matches_row(guest, row):
 
 
 # Fungsi untuk memperbarui tamu dari baris.
-def update_guest_from_row(guest, row):
+def update_guest_from_row(guest, row, added_by=None):
     guest.no = row.get("no") or 0
     guest.nama = row.get("nama")
     guest.no_hp = row.get("no_hp")
     guest.email = row.get("email")
     guest.status = clean_guest_status(row.get("status"))
+    source_label = clean_guest_added_by(added_by or row.get("added_by"))
+    if source_label:
+        guest.added_by = source_label
 
 
 # Fungsi untuk mengambil nomor urut tamu berikutnya.
@@ -360,11 +384,28 @@ def get_next_guest_no(owner_user_id):
 
 
 # Fungsi untuk membuat data tamu manual.
-def build_manual_guest_data(source, owner_user):
+def build_manual_guest_data(source, owner_user, added_by=None):
     raw_no_hp = source.get("no_hp")
     no_hp = clean_guest_phone(raw_no_hp) if is_allowed_phone_input(raw_no_hp) else ""
     guest_data = {
         "no": get_next_guest_no(owner_user.id),
+        "nama": clean_guest_name(source.get("nama")),
+        "no_hp": no_hp,
+        "email": clean_guest_email(source.get("email")) or None,
+        "status": clean_guest_status(source.get("status")),
+        "added_by": clean_guest_added_by(added_by) or build_owner_guest_added_by(owner_user),
+    }
+
+    if not guest_data["nama"] or not guest_data["no_hp"]:
+        return None
+    return guest_data
+
+
+# Fungsi untuk membangun data edit tamu dari input form.
+def build_guest_edit_data(source):
+    raw_no_hp = source.get("no_hp")
+    no_hp = clean_guest_phone(raw_no_hp) if is_allowed_phone_input(raw_no_hp) else ""
+    guest_data = {
         "nama": clean_guest_name(source.get("nama")),
         "no_hp": no_hp,
         "email": clean_guest_email(source.get("email")) or None,
@@ -377,10 +418,14 @@ def build_manual_guest_data(source, owner_user):
 
 
 # Fungsi untuk memeriksa apakah nomor HP tamu sudah terdaftar.
-def is_guest_phone_registered(owner_user, no_hp):
+def is_guest_phone_registered(owner_user, no_hp, exclude_guest_id=None):
     if not owner_user or not no_hp:
         return False
-    return Guests.query.filter_by(user_id=owner_user.id, no_hp=str(no_hp)).first() is not None
+
+    query = Guests.query.filter_by(user_id=owner_user.id, no_hp=str(no_hp))
+    if exclude_guest_id is not None:
+        query = query.filter(Guests.id != exclude_guest_id)
+    return query.first() is not None
 
 
 # Fungsi untuk membersihkan data tamu tersimpan milik pemilik.
@@ -485,9 +530,10 @@ def build_guest_upload_preview(file, owner_user):
 
 
 # Fungsi untuk menyimpan baris tamu.
-def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates=False):
+def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates=False, added_by=None):
     duplicate_indexes = set(duplicate_indexes or [])
     saved_count = 0
+    source_label = clean_guest_added_by(added_by) or build_owner_guest_added_by(owner_user)
 
     for row_index, row in enumerate(rows):
         if row_index in duplicate_indexes and not include_duplicates:
@@ -499,6 +545,7 @@ def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates
         guest.no_hp = row.get("no_hp")
         guest.email = row.get("email")
         guest.status = clean_guest_status(row.get("status"))
+        guest.added_by = clean_guest_added_by(row.get("added_by")) or source_label
         guest.user_id = owner_user.id
         db.session.add(guest)
         saved_count += 1
@@ -508,8 +555,9 @@ def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates
 
 
 # Fungsi untuk mengganti baris tamu.
-def replace_guest_rows(owner_user, rows):
+def replace_guest_rows(owner_user, rows, added_by=None):
     affected_count = 0
+    source_label = clean_guest_added_by(added_by) or build_owner_guest_added_by(owner_user)
 
     for row in rows:
         existing_guests = Guests.query.filter_by(user_id=owner_user.id).order_by(Guests.id.asc()).all()
@@ -517,13 +565,13 @@ def replace_guest_rows(owner_user, rows):
 
         if matching_guests:
             target_guest = matching_guests[0]
-            update_guest_from_row(target_guest, row)
+            update_guest_from_row(target_guest, row, added_by=source_label)
             for duplicate_guest in matching_guests[1:]:
                 db.session.delete(duplicate_guest)
         else:
             guest = Guests()
             guest.user_id = owner_user.id
-            update_guest_from_row(guest, row)
+            update_guest_from_row(guest, row, added_by=source_label)
             db.session.add(guest)
 
         affected_count += 1
@@ -574,7 +622,7 @@ def load_pending_guest_upload():
     try:
         with pending_path.open("r", encoding="utf-8") as pending_file:
             return json.load(pending_file)
-    except (OSError, json.JSONDecodeError):
+    except OSError, json.JSONDecodeError:
         return None
 
 

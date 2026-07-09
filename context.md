@@ -111,7 +111,10 @@ Kolom:
 - `no_hp`
 - `email`
 - `status`
+- `added_by`
 - `kehadiran`
+- `verified_by_staff_id`
+- `verified_by_staff_name`
 - `user_id`
 
 Relasi:
@@ -119,6 +122,7 @@ Relasi:
 - User role `user` hanya boleh mengakses data tamu miliknya.
 - Role `admin` dan `super_admin` boleh mengakses data tamu semua user.
 - Staff hanya boleh mengakses data tamu milik client pemilik staff.
+- `added_by` menyimpan label sumber penambah tamu. Upload client/admin untuk client memakai `username` client, tambah manual client memakai nama client, dan tambah manual staff memakai nama staff.
 
 ### GuestShortUrl
 
@@ -482,6 +486,7 @@ Pilihan:
 - `Tidak`: data yang sama tidak dimasukkan.
 
 Duplicate dicocokkan terhadap data tersimpan dan baris lain di file upload berdasarkan nilai yang sama pada `no_hp` atau `email`. `nama` tetap wajib dan dibersihkan, tetapi tidak dipakai sebagai kunci unique saat upload.
+Setiap tamu yang masuk lewat upload client/admin untuk client mengisi kolom `Ditambahkan` dengan `username` client pemilik data.
 
 ## Data Tamu Role User
 
@@ -506,14 +511,18 @@ Kolom tabel:
 - `No HP`
 - `Email`
 - `Status`
+- `Ditambahkan`
 - `Kehadiran`
+- `Verifikasi`
 - `QR Code`
+- `WhatsApp`
 - `Action`
 
 Action per baris:
 - `View` pada kolom `QR Code`: membuka halaman QR publik tamu Premium di tab baru. Jika client bukan Premium, nilai kolom `QR Code` adalah `N/A`.
-- `Edit`: mengubah kolom `Status` menjadi dropdown `Reguler` / `VIP`, lalu tombol berubah menjadi `Simpan` warna biru.
-- Saat mode edit aktif, tombol `Hapus` berubah menjadi `Batal` dengan warna merah yang sama seperti tombol `Hapus`; klik `Batal` membatalkan edit, mengembalikan dropdown ke nilai awal, dan tidak menghapus data.
+- `Edit`: pada backend client mengubah kolom `Nama`, `No HP`, `Email`, dan `Status` menjadi field edit inline, lalu tombol berubah menjadi `Simpan` warna biru.
+- Saat mode edit aktif, tombol `Hapus` berubah menjadi `Batal` dengan warna merah yang sama seperti tombol `Hapus`; klik `Batal` membatalkan edit, mengembalikan field ke nilai awal, dan tidak menghapus data.
+- Selama mode edit aktif, tombol `Simpan` dan `Batal` tetap ditampilkan sampai salah satunya diklik, termasuk saat user klik area lain di halaman.
 - `Hapus`: menghapus baris data tamu terpilih saat row tidak sedang dalam mode edit.
 
 Fitur `Hapus Semua Data` untuk role user sudah dihilangkan dari UI. Route lama `/user/delete-data` tetap ada sebagai fallback, tetapi sudah dinonaktifkan dan tidak menghapus data.
@@ -538,6 +547,7 @@ Data dari popup tetap melewati cleaning yang sama:
 - `no_hp` divalidasi unik per pemilik data tamu dan dinormalisasi ke format canonical `62...`.
 - `email` invalid menjadi `N/A`.
 - `status` default `Reguler` jika kosong/tidak valid.
+- `Ditambahkan` diisi dengan nama client yang sedang login, fallback ke username jika nama kosong.
 
 Jika `nama` atau `no_hp` tidak valid, data tidak disimpan dan popup tetap terbuka dengan pesan error.
 
@@ -611,6 +621,7 @@ Area staff langsung membuka menu `Data` setelah PIN login berhasil. Layout sideb
 
 Halaman `Data` staff memakai tampilan data tamu yang sama dengan client, tetapi tanpa upload Excel.
 Popup `Tambah Tamu` staff memakai format input nomor HP yang sama dengan manual user: UI prefix `+62`, input lokal minimal 8 digit yang diawali `08` atau `8`, lalu backend menyimpan canonical `62...`.
+Tamu yang ditambahkan dari area staff mengisi kolom `Ditambahkan` dengan nama staff, fallback ke nomor HP staff jika nama kosong.
 
 Fitur Data staff:
 - Search.
@@ -636,6 +647,7 @@ Menu sidebar admin yang sebelumnya tampil sebagai `Guests` sekarang tampil sebag
 Halaman admin menampilkan:
 - Upload Excel untuk user pemilik data yang dipilih.
 - Upload admin menyimpan file Excel asli ke `instance/uploads/` memakai event terbaru dan username client pemilik data yang dipilih.
+- Data tamu yang masuk lewat upload admin tetap mengisi `Ditambahkan` dengan `username` client pemilik data, bukan username admin.
 - Setelah upload, admin/super admin melihat popup `Konfirmasi Upload Data Tamu` yang sama dengan client.
 - Popup admin/super admin menampilkan ringkasan `Data valid`, `Data yang sama`, `Dihapus saat cleaning`, tabel data yang dihapus saat cleaning, dan tabel duplicate jika ada.
 - Jika duplicate ditemukan, popup admin/super admin menampilkan pertanyaan `Apakah akan memperbarui data yang sama?`.
@@ -1177,6 +1189,12 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Aturan dokumentasi 2026-07-07: `rules.txt` diperketat agar setiap perubahan fitur, UI/UX, route, model database, validasi, job otomatis, deploy, atau spesifikasi wajib ditutup dengan update `context.md` sebelum jawaban final.
 - Update Payment History 2026-07-07: histori pembayaran admin/super admin dipindahkan dari halaman `/admin/payment` ke halaman baru `/admin/payment-history`, dan submenu `Client` sekarang menampilkan `Payment History` tepat di bawah `Payment`.
 - Verifikasi Payment History 2026-07-07: `.venv\Scripts\python.exe -m py_compile blueprints\admin\routes.py`, targeted unittest route admin payment, dan render template `admin_payment.html` serta `admin_payment_history.html` berhasil.
+- Update Data Tamu client 2026-07-09: tabel client/staff menampilkan kolom `Ditambahkan` setelah `Status`; upload client/admin untuk client dan tambah manual client mengisi `username` client, sedangkan tambah manual staff mengisi nama staff. Mode edit client memastikan tombol `Simpan` dan `Batal` tetap visible sampai salah satunya diklik, termasuk saat klik area lain di halaman.
+- Verifikasi Data Tamu client 2026-07-09: `.venv\Scripts\python.exe -m py_compile app.py blueprints\registry.py blueprints\staff\routes.py blueprints\user\routes.py constants.py models.py services\guest_service.py services\schema_service.py tests\test_guest_service.py tests\test_user_routes.py`, targeted unittest `tests.test_guest_service tests.test_user_routes tests.test_staff`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 110 test.
+- Fix action menu Data Tamu client 2026-07-09: `static/action_toggle.js` tidak menutup menu action pada row yang sedang `is-editing`; template Data Tamu mengirim event `guest-row-editing-change` supaya menu `Show/Hide` tetap terbuka selama edit.
+- Tombol action Data Tamu client memakai `data-row-id` untuk tetap menemukan tombol `Simpan/Batal` setelah action menu memindahkan tombol ke popup `Show/Hide`.
+- Update edit Data Tamu client 2026-07-09: tombol `Edit` pada backend client sekarang dapat mengedit `nama`, `no_hp`, `email`, dan `status`; validasi backend tetap membersihkan nama, normalisasi no HP ke `62...`, mengosongkan email invalid menjadi `N/A`, serta menolak no HP duplicate milik client yang sama. Tambah tamu manual client sekarang mencatat `Ditambahkan` memakai nama client, bukan username.
+- Verifikasi edit Data Tamu client 2026-07-09: `.venv\Scripts\python.exe -m py_compile app.py blueprints\guests\routes.py blueprints\registry.py blueprints\user\routes.py services\guest_service.py services\listing_service.py tests\test_guest_routes.py tests\test_user_routes.py`, targeted unittest `tests.test_guest_routes tests.test_user_routes tests.test_guest_service` berhasil menjalankan 19 test, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 112 test.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.

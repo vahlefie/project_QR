@@ -5,6 +5,7 @@ from constants import (
     DEFAULT_SUPER_ADMIN_PASSWORD,
     DEMO_GUEST_EXCEL_FILENAME,
     DEMO_GUEST_EXCEL_PATH,
+    GUEST_ADDED_BY_MAX_LENGTH,
     GUEST_STATUS_OPTIONS,
     ROLE_SUPER_ADMIN,
 )
@@ -97,6 +98,11 @@ def ensure_guests_user_schema():
         db.session.execute(text("ALTER TABLE guests ADD COLUMN kehadiran DATETIME"))
         db.session.commit()
         guest_columns.add("kehadiran")
+
+    if "added_by" not in guest_columns:
+        db.session.execute(text(f"ALTER TABLE guests ADD COLUMN added_by VARCHAR({GUEST_ADDED_BY_MAX_LENGTH})"))
+        db.session.commit()
+        guest_columns.add("added_by")
 
     if "verified_by_staff_id" not in guest_columns:
         db.session.execute(text("ALTER TABLE guests ADD COLUMN verified_by_staff_id INTEGER"))

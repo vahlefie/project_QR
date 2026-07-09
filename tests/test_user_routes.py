@@ -3,9 +3,11 @@ import time
 import unittest
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import app as app_module
 from constants import SESSION_ACTIVE_TOKEN_KEY, SESSION_LAST_ACTIVITY_KEY
+from flask import render_template
 from models import BillingPayment, User
 
 
@@ -107,6 +109,63 @@ class UserRouteTest(unittest.TestCase):
         self.assertNotIn("attachment", response.headers.get("Content-Disposition", ""))
         self.assertIn("Ekspor Data", html)
         self.assertIn("Masa aktif event sudah berakhir", html)
+
+    # Fungsi untuk memastikan tabel Data client menampilkan sumber penambah dan action edit stabil.
+    def test_user_data_template_shows_added_by_and_stable_edit_actions(self):
+        guest = SimpleNamespace(
+            id=987,
+            nama="Tamu Added",
+            no_hp="628123456789",
+            email=None,
+            status="VIP",
+            added_by="client_added",
+            kehadiran=None,
+            verified_by_staff_name=None,
+        )
+        with app_module.app.test_request_context("/user/data"):
+            html = render_template(
+                "user_data.html",
+                layout_template="user_layout.html",
+                allow_guest_upload=False,
+                allow_guest_export=False,
+                allow_guest_mutations=True,
+                allow_guest_full_edit=True,
+                show_guest_qr_column=False,
+                data_endpoint="user.user_data",
+                add_guest_endpoint="user.add_user_guest",
+                status_endpoint="guests.update_guest_status",
+                delete_endpoint="guests.delete_guest_row",
+                user="Client Test",
+                message="",
+                guests=[guest],
+                total_guests=1,
+                pagination=SimpleNamespace(page=1, pages=1, has_prev=False, has_next=False),
+                search="",
+                sort_by="latest",
+                per_page=10,
+                guest_status_options=("Reguler", "VIP"),
+                default_guest_status="Reguler",
+            )
+
+        self.assertIn("<th>Ditambahkan</th>", html)
+        self.assertIn("<td>client_added</td>", html)
+        self.assertIn('name="nama"', html)
+        self.assertIn('name="no_hp"', html)
+        self.assertIn('name="email"', html)
+        self.assertIn('form="guest-status-form-user-987"', html)
+        self.assertIn('deleteButton.textContent = isEditing ? "Batal" : "Hapus";', html)
+        self.assertIn("editButton.hidden = false;", html)
+        self.assertIn("deleteButton.hidden = false;", html)
+        self.assertIn('data-row-id="guest-row-987"', html)
+        self.assertIn("const findGuestRowAction", html)
+        self.assertIn('document.querySelector(`${selector}[data-row-id="${row.id}"]`)', html)
+        self.assertIn('new CustomEvent("guest-row-editing-change"', html)
+        self.assertIn("document.getElementById(button.dataset.rowId)", html)
+
+        action_toggle_script = Path("static/action_toggle.js").read_text(encoding="utf-8")
+        self.assertIn("function isActionMenuPinned(group)", action_toggle_script)
+        self.assertIn('document.addEventListener("guest-row-editing-change"', action_toggle_script)
+        self.assertIn("isActionMenuPinned(openGroup)", action_toggle_script)
 
 
 if __name__ == "__main__":

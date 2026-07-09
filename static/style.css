@@ -1790,6 +1790,13 @@ tr.is-editing .editable-cell .read-value {
     align-items: center;
 }
 
+tr.is-editing .action-group,
+tr.is-editing .inline-action-form,
+tr.is-editing .guest-edit-toggle,
+tr.is-editing .guest-delete-toggle {
+    visibility: visible;
+}
+
 .action-group.is-collapsible {
     align-items: flex-start;
 }

@@ -201,6 +201,7 @@ def build_user_guest_context(current_user, search, page, per_page, sort_by):
     context["add_guest_endpoint"] = "user.add_user_guest"
     context["status_endpoint"] = "guests.update_guest_status"
     context["delete_endpoint"] = "guests.delete_guest_row"
+    context["allow_guest_full_edit"] = True
     return context
 
 

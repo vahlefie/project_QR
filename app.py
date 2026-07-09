@@ -666,7 +666,7 @@ def attendance_time_filter(value):
 def rupiah_filter(value):
     try:
         amount = int(value or 0)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         amount = 0
     return f"Rp {amount:,}".replace(",", ".")
 
@@ -947,8 +947,8 @@ def guest_matches_row(guest, row):
 
 
 # Fungsi untuk memperbarui data tamu dengan data dari satu baris Excel jika cocok
-def update_guest_from_row(guest, row):
-    guest_service.update_guest_from_row(guest, row)
+def update_guest_from_row(guest, row, added_by=None):
+    guest_service.update_guest_from_row(guest, row, added_by=added_by)
 
 
 # Fungsi untuk mendapatkan nomor urut tamu berikutnya untuk pemilik tertentu
@@ -956,14 +956,29 @@ def get_next_guest_no(owner_user_id):
     return guest_service.get_next_guest_no(owner_user_id)
 
 
+# Fungsi untuk mengambil label penambah tamu dari akun client pemilik data.
+def build_owner_guest_added_by(owner_user):
+    return guest_service.build_owner_guest_added_by(owner_user)
+
+
+# Fungsi untuk mengambil label penambah tamu dari akun staff.
+def build_staff_guest_added_by(staff):
+    return guest_service.build_staff_guest_added_by(staff)
+
+
 # Fungsi untuk membangun data tamu manual dari input form dengan validasi dan normalisasi
-def build_manual_guest_data(source, owner_user):
-    return guest_service.build_manual_guest_data(source, owner_user)
+def build_manual_guest_data(source, owner_user, added_by=None):
+    return guest_service.build_manual_guest_data(source, owner_user, added_by=added_by)
+
+
+# Fungsi untuk membangun data edit tamu dari input form dengan validasi dan normalisasi.
+def build_guest_edit_data(source):
+    return guest_service.build_guest_edit_data(source)
 
 
 # Fungsi untuk mengecek apakah nomor HP tamu sudah terdaftar di data milik user tertentu
-def is_guest_phone_registered(owner_user, no_hp):
-    return guest_service.is_guest_phone_registered(owner_user, no_hp)
+def is_guest_phone_registered(owner_user, no_hp, exclude_guest_id=None):
+    return guest_service.is_guest_phone_registered(owner_user, no_hp, exclude_guest_id=exclude_guest_id)
 
 
 # Fungsi untuk membersihkan data tamu tersimpan milik user tertentu
@@ -1012,13 +1027,13 @@ def save_uploaded_guest_file(file, owner_user):
 
 
 # Fungsi untuk menyimpan baris tamu hasil preview ke database
-def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates=False):
-    return guest_service.save_guest_rows(owner_user, rows, duplicate_indexes, include_duplicates)
+def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates=False, added_by=None):
+    return guest_service.save_guest_rows(owner_user, rows, duplicate_indexes, include_duplicates, added_by=added_by)
 
 
 # Fungsi untuk mengganti data tamu yang sudah ada dengan data dari file upload jika user memilih opsi replace
-def replace_guest_rows(owner_user, rows):
-    return guest_service.replace_guest_rows(owner_user, rows)
+def replace_guest_rows(owner_user, rows, added_by=None):
+    return guest_service.replace_guest_rows(owner_user, rows, added_by=added_by)
 
 
 # Fungsi untuk membangun path file pending upload berdasarkan id session
@@ -1206,13 +1221,16 @@ def build_blueprint_dependencies():
         build_staff_attendance_url=build_staff_attendance_url,
         build_guest_query=build_guest_query,
         build_guest_table_redirect=build_guest_table_redirect,
+        build_guest_edit_data=build_guest_edit_data,
         build_guest_upload_preview=build_guest_upload_preview,
         build_guest_whatsapp_invite=build_guest_whatsapp_invite,
+        build_owner_guest_added_by=build_owner_guest_added_by,
         build_qr_already_verified_message=build_qr_already_verified_message,
         build_qr_welcome_message=build_qr_welcome_message,
         build_manual_guest_data=build_manual_guest_data,
         build_password_template_context=build_password_template_context,
         build_staff_access_url=build_staff_access_url,
+        build_staff_guest_added_by=build_staff_guest_added_by,
         build_staff_guest_context=build_staff_guest_context,
         build_staff_guest_table_redirect=build_staff_guest_table_redirect,
         build_staff_log_keyword=build_staff_log_keyword,

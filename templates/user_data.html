@@ -10,6 +10,7 @@
 {% set status_route = status_endpoint|default("guests.update_guest_status") %}
 {% set delete_route = delete_endpoint|default("guests.delete_guest_row") %}
 {% set show_qr_column = show_guest_qr_column|default(true) %}
+{% set allow_full_edit = allow_guest_full_edit|default(false) %}
 <div class="card">
     <h3>Data Tamu</h3>
     {% if show_table %}
@@ -84,6 +85,7 @@
                             <th>No HP</th>
                             <th>Email</th>
                             <th>Status</th>
+                            <th>Ditambahkan</th>
                             <th>Kehadiran</th>
                             <th>Verifikasi</th>
                             {% if show_qr_column %}
@@ -97,9 +99,50 @@
                         {% for guest in guests %}
                         <tr id="guest-row-{{ guest.id }}">
                             <td>{{ (pagination.page - 1) * per_page + loop.index }}</td>
-                            <td>{{ guest.nama }}</td>
-                            <td>{{ guest.no_hp or 'N/A' }}</td>
-                            <td>{{ guest.email or 'N/A' }}</td>
+                            <td class="{% if allow_full_edit %}editable-cell{% endif %}">
+                                <span class="{% if allow_full_edit %}read-value{% endif %}">{{ guest.nama }}</span>
+                                {% if allow_full_edit %}
+                                    <input
+                                        form="guest-status-form-user-{{ guest.id }}"
+                                        class="edit-control"
+                                        type="text"
+                                        name="nama"
+                                        value="{{ guest.nama }}"
+                                        maxlength="30"
+                                        required
+                                    >
+                                {% endif %}
+                            </td>
+                            <td class="{% if allow_full_edit %}editable-cell{% endif %}">
+                                <span class="{% if allow_full_edit %}read-value{% endif %}">{{ guest.no_hp or 'N/A' }}</span>
+                                {% if allow_full_edit %}
+                                    <input
+                                        form="guest-status-form-user-{{ guest.id }}"
+                                        class="edit-control"
+                                        type="text"
+                                        inputmode="numeric"
+                                        name="no_hp"
+                                        value="{{ guest.no_hp or '' }}"
+                                        minlength="8"
+                                        pattern="(62[0-9]{6,}|08[0-9]{6,}|8[0-9]{7,})"
+                                        title="No HP minimal 8 digit, hanya angka, dan harus diawali 62, 08, atau 8"
+                                        required
+                                    >
+                                {% endif %}
+                            </td>
+                            <td class="{% if allow_full_edit %}editable-cell{% endif %}">
+                                <span class="{% if allow_full_edit %}read-value{% endif %}">{{ guest.email or 'N/A' }}</span>
+                                {% if allow_full_edit %}
+                                    <input
+                                        form="guest-status-form-user-{{ guest.id }}"
+                                        class="edit-control"
+                                        type="email"
+                                        name="email"
+                                        value="{{ guest.email or '' }}"
+                                        maxlength="30"
+                                    >
+                                {% endif %}
+                            </td>
                             <td class="editable-cell">
                                 <span class="read-value">{{ guest.status or default_guest_status }}</span>
                                 <form
@@ -121,6 +164,7 @@
                                     </select>
                                 </form>
                             </td>
+                            <td>{{ guest.added_by or 'N/A' }}</td>
                             <td>{{ guest.kehadiran|attendance_time }}</td>
                             <td>{{ guest.verified_by_staff_name or 'N/A' }}</td>
                             {% if show_qr_column %}
@@ -171,6 +215,7 @@
                                         <button
                                             type="submit"
                                             class="danger-button table-action-button guest-delete-toggle"
+                                            data-row-id="guest-row-{{ guest.id }}"
                                             data-confirm-message="Yakin hapus data tamu ini?"
                                         >
                                             Hapus
@@ -431,8 +476,13 @@
 {% endif %}
 
 <script>
+const findGuestRowAction = (row, selector) => {
+    return row.querySelector(selector) || document.querySelector(`${selector}[data-row-id="${row.id}"]`);
+};
+
 const setGuestRowEditing = (row, editButton, form, isEditing, resetForm = false) => {
-    const deleteButton = row.querySelector(".guest-delete-toggle");
+    const deleteButton = findGuestRowAction(row, ".guest-delete-toggle");
+    const deleteForm = deleteButton ? deleteButton.closest("form") : null;
 
     if (resetForm) {
         form.reset();
@@ -442,12 +492,25 @@ const setGuestRowEditing = (row, editButton, form, isEditing, resetForm = false)
     editButton.dataset.editing = String(isEditing);
     editButton.textContent = isEditing ? "Simpan" : "Edit";
     editButton.classList.toggle("secondary-button", !isEditing);
+    editButton.hidden = false;
+    editButton.classList.remove("is-hidden");
 
     if (deleteButton) {
         deleteButton.textContent = isEditing ? "Batal" : "Hapus";
         deleteButton.classList.add("danger-button");
         deleteButton.classList.remove("secondary-button");
+        deleteButton.hidden = false;
+        deleteButton.classList.remove("is-hidden");
     }
+
+    if (deleteForm) {
+        deleteForm.hidden = false;
+        deleteForm.classList.remove("is-hidden");
+    }
+
+    document.dispatchEvent(new CustomEvent("guest-row-editing-change", {
+        detail: { row, isEditing },
+    }));
 };
 
 document.querySelectorAll(".guest-edit-toggle").forEach((button) => {
@@ -461,14 +524,22 @@ document.querySelectorAll(".guest-edit-toggle").forEach((button) => {
         }
 
         setGuestRowEditing(row, button, form, true);
-        form.querySelector("select").focus();
+        const firstControl = row.querySelector(
+            "input.edit-control, select.edit-control, textarea.edit-control, .edit-control input, .edit-control select, .edit-control textarea"
+        );
+        if (firstControl) {
+            firstControl.focus();
+        }
     });
 });
 
 document.querySelectorAll(".guest-delete-toggle").forEach((button) => {
     button.addEventListener("click", (event) => {
-        const row = button.closest("tr");
-        const editButton = row.querySelector(".guest-edit-toggle");
+        const row = document.getElementById(button.dataset.rowId) || button.closest("tr");
+        if (!row) {
+            return;
+        }
+        const editButton = findGuestRowAction(row, ".guest-edit-toggle");
         const form = editButton ? document.getElementById(editButton.dataset.formId) : null;
 
         if (editButton && editButton.dataset.editing === "true") {

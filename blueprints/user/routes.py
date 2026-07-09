@@ -137,7 +137,11 @@ def create_user_blueprint(deps):
             "email": request.form.get("email", ""),
             "status": request.form.get("status", deps.DEFAULT_GUEST_STATUS),
         }
-        guest_data = deps.build_manual_guest_data(form_data, current_user)
+        guest_data = deps.build_manual_guest_data(
+            form_data,
+            current_user,
+            added_by=current_user.nama or current_user.username,
+        )
 
         if not guest_data:
             context = deps.build_user_guest_context(
@@ -168,6 +172,7 @@ def create_user_blueprint(deps):
         guest.no_hp = guest_data["no_hp"]
         guest.email = guest_data["email"]
         guest.status = guest_data["status"]
+        guest.added_by = guest_data.get("added_by")
         guest.user_id = current_user.id
         deps.db.session.add(guest)
         deps.db.session.commit()

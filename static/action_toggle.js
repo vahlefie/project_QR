@@ -12,6 +12,11 @@
         return actionMenuRegistry.get(group) || document.getElementById(group.dataset.actionMenuId);
     }
 
+    function isActionMenuPinned(group) {
+        const row = group ? group.closest("tr") : null;
+        return Boolean(row && row.classList.contains("is-editing"));
+    }
+
     function positionActionMenu(group) {
         const toggleButton = group.querySelector(".action-toggle-button");
         const menuItems = getActionMenu(group);
@@ -44,10 +49,15 @@
         menuItems.style.maxHeight = `${Math.max(80, availableHeight)}px`;
     }
 
-    function setActionMenuState(group, isOpen) {
+    function setActionMenuState(group, isOpen, options = {}) {
         const toggleButton = group.querySelector(".action-toggle-button");
         const menuItems = getActionMenu(group);
         if (!toggleButton || !menuItems) {
+            return;
+        }
+
+        if (!isOpen && isActionMenuPinned(group) && !options.force) {
+            positionActionMenu(group);
             return;
         }
 
@@ -116,7 +126,22 @@
             return;
         }
 
+        if (isActionMenuPinned(openGroup)) {
+            positionActionMenu(openGroup);
+            return;
+        }
+
         setActionMenuState(openGroup, false);
+    });
+
+    document.addEventListener("guest-row-editing-change", (event) => {
+        const row = event.detail ? event.detail.row : null;
+        const group = row ? row.querySelector(".action-group") : null;
+        if (!group || group.dataset.actionToggleReady !== "true") {
+            return;
+        }
+
+        setActionMenuState(group, Boolean(event.detail.isEditing), { force: !event.detail.isEditing });
     });
 
     window.addEventListener("resize", () => {

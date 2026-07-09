@@ -11,11 +11,7 @@ def create_staff_blueprint(deps):
     # Route untuk menampilkan halaman sesi staff berakhir.
     def staff_session_expired():
         is_logout = request.args.get("reason") == "logout"
-        message = (
-            "Logout staff berhasil."
-            if is_logout
-            else "Silakan minta client membuka akses staff kembali."
-        )
+        message = "Logout staff berhasil." if is_logout else "Silakan minta client membuka akses staff kembali."
         status_code = 200 if is_logout else 401
         return render_template("staff_session_expired.html", message=message), status_code
 
@@ -147,7 +143,11 @@ def create_staff_blueprint(deps):
             "email": request.form.get("email", ""),
             "status": request.form.get("status", deps.DEFAULT_GUEST_STATUS),
         }
-        guest_data = deps.build_manual_guest_data(form_data, owner_user)
+        guest_data = deps.build_manual_guest_data(
+            form_data,
+            owner_user,
+            added_by=deps.build_staff_guest_added_by(staff),
+        )
 
         if not guest_data:
             context = deps.build_staff_guest_context(
@@ -178,6 +178,7 @@ def create_staff_blueprint(deps):
         guest.no_hp = guest_data["no_hp"]
         guest.email = guest_data["email"]
         guest.status = guest_data["status"]
+        guest.added_by = guest_data.get("added_by")
         guest.user_id = owner_user.id
         deps.db.session.add(guest)
         deps.db.session.commit()

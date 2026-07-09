@@ -118,6 +118,70 @@ class GuestRouteTest(unittest.TestCase):
             User.query.filter_by(username="guest_route_user").delete()
             app_module.db.session.commit()
 
+    # Fungsi untuk memastikan client dapat mengedit nama, no HP, email, dan status tamu.
+    def test_user_can_edit_full_guest_details(self):
+        owner_user_id = self.login_as_user("guest_full_edit_user")
+
+        with app_module.app.app_context():
+            guest = Guests()
+            guest.nama = "Nama Awal"
+            guest.no_hp = "6281200011111"
+            guest.email = "awal@example.com"
+            guest.status = "Reguler"
+            guest.user_id = owner_user_id
+            app_module.db.session.add(guest)
+            app_module.db.session.commit()
+            guest_id = guest.id
+
+        response = self.client.post(
+            f"/guests/{guest_id}/status",
+            data={
+                "nama": "  nama baru@@  ",
+                "no_hp": "081200022222",
+                "email": "BARU@EXAMPLE.COM",
+                "status": "VIP",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        with app_module.app.app_context():
+            guest = app_module.db.session.get(Guests, guest_id)
+            self.assertEqual(guest.nama, "Nama Baru")
+            self.assertEqual(guest.no_hp, "6281200022222")
+            self.assertEqual(guest.email, "baru@example.com")
+            self.assertEqual(guest.status, "VIP")
+
+            Guests.query.filter_by(user_id=owner_user_id).delete()
+            BillingPayment.query.filter_by(user_id=owner_user_id).delete()
+            User.query.filter_by(username="guest_full_edit_user").delete()
+            app_module.db.session.commit()
+
+    # Fungsi untuk memastikan tambah manual client mencatat nama client sebagai sumber penambah.
+    def test_user_manual_add_guest_records_client_name(self):
+        owner_user_id = self.login_as_user("guest_manual_added_by_user")
+
+        response = self.client.post(
+            "/user/guests/new",
+            data={
+                "nama": "tamu manual",
+                "no_hp": "081200033333",
+                "email": "",
+                "status": "Reguler",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        with app_module.app.app_context():
+            guest = Guests.query.filter_by(user_id=owner_user_id, no_hp="6281200033333").first()
+            self.assertIsNotNone(guest)
+            self.assertEqual(guest.nama, "Tamu Manual")
+            self.assertEqual(guest.added_by, "Guest Route User")
+
+            Guests.query.filter_by(user_id=owner_user_id).delete()
+            BillingPayment.query.filter_by(user_id=owner_user_id).delete()
+            User.query.filter_by(username="guest_manual_added_by_user").delete()
+            app_module.db.session.commit()
+
 
 if __name__ == "__main__":
     unittest.main()
