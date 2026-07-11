@@ -191,9 +191,11 @@ def create_admin_blueprint(deps):
             origin_bank = "N/A"
             account_number = "N/A"
 
+        deleted_staff_count = 0
         previous_payment = deps.get_latest_verified_payment(account)
         if previous_payment and previous_payment.period_end and previous_payment.period_end < date.today():
             deps.archive_previous_event_for_reactivation(account, previous_payment)
+            deleted_staff_count = deps.delete_client_staff_members(account)
 
         payment = deps.BillingPayment()
         payment.user_id = account.id
@@ -234,6 +236,7 @@ def create_admin_blueprint(deps):
                 "payment_method": payment.payment_method,
                 "payment_type": payment.payment_type,
                 "event_name": payment.event_name,
+                "deleted_staff_count": deleted_staff_count,
             },
         )
         return build_payment_redirect(message="Payment client berhasil dicatat.", owner_user_id=owner_user_id)

@@ -8,7 +8,7 @@ import app as app_module
 import pandas as pd
 from constants import SESSION_ACTIVE_TOKEN_KEY, SESSION_LAST_ACTIVITY_KEY
 from flask import render_template
-from models import BillingPayment, Guests, User, WhatsappSetting, WhatsappTemplate
+from models import BillingPayment, Guests, Staff, User, WhatsappSetting, WhatsappTemplate
 
 
 class AdminRouteTest(unittest.TestCase):
@@ -442,6 +442,79 @@ class AdminRouteTest(unittest.TestCase):
             app_module.db.session.delete(client)
             User.query.filter_by(username="admin_route_test").delete()
             app_module.db.session.commit()
+
+    # Fungsi untuk memastikan reaktivasi event baru menghapus staff event sebelumnya.
+    def test_input_payment_reactivation_deletes_previous_event_staff(self):
+        self.login_as_admin("admin_reactivate_staff_test")
+        username = "reactivation_staff_client"
+        with app_module.app.app_context():
+            existing_client = User.query.filter_by(username=username).first()
+            if existing_client:
+                Staff.query.filter_by(owner_user_id=existing_client.id).delete()
+                BillingPayment.query.filter_by(user_id=existing_client.id).delete()
+                app_module.db.session.delete(existing_client)
+            User.query.filter_by(no_hp=6281200011888).delete()
+            app_module.db.session.commit()
+
+            client = User()
+            client.username = username
+            client.nama = "Reactivation Staff Client"
+            client.email = f"{username}@example.com"
+            client.no_hp = 6281200011888
+            client.role = app_module.ROLE_USER
+            app_module.db.session.add(client)
+            app_module.db.session.commit()
+
+            previous_payment = BillingPayment()
+            previous_payment.user_id = client.id
+            previous_payment.payment_date = date.today() - timedelta(days=14)
+            previous_payment.amount = 100000
+            previous_payment.payment_method = "Cash"
+            previous_payment.payment_type = "Lunas"
+            previous_payment.package_name = app_module.PACKAGE_PREMIUM
+            previous_payment.period_start = date.today() - timedelta(days=14)
+            previous_payment.period_end = date.today() - timedelta(days=1)
+            previous_payment.event_name = "Old Staff Event"
+            previous_payment.status = "verified"
+            app_module.db.session.add(previous_payment)
+
+            staff = Staff()
+            staff.owner_user_id = client.id
+            staff.nama = "Old Staff 1"
+            staff.no_hp = "6281200011889"
+            app_module.db.session.add(staff)
+            app_module.db.session.commit()
+            client_id = client.id
+
+        try:
+            response = self.client.post(
+                "/admin/payment/input",
+                data={
+                    "owner_user_id": str(client_id),
+                    "amount": "100000",
+                    "payment_date": date.today().isoformat(),
+                    "payment_time": "10:00",
+                    "package_name": app_module.PACKAGE_PREMIUM,
+                    "payment_type": "Lunas",
+                    "period_start": date.today().isoformat(),
+                    "period_end": (date.today() + timedelta(days=7)).isoformat(),
+                    "event_name": "New Staff Event",
+                    "payment_method": "Cash",
+                },
+            )
+
+            self.assertEqual(response.status_code, 302)
+            with app_module.app.app_context():
+                self.assertEqual(Staff.query.filter_by(owner_user_id=client_id).count(), 0)
+        finally:
+            with app_module.app.app_context():
+                client = User.query.filter_by(username=username).first()
+                if client:
+                    Staff.query.filter_by(owner_user_id=client.id).delete()
+                    BillingPayment.query.filter_by(user_id=client.id).delete()
+                    app_module.db.session.delete(client)
+                User.query.filter_by(username="admin_reactivate_staff_test").delete()
+                app_module.db.session.commit()
 
 
 if __name__ == "__main__":

@@ -43,6 +43,8 @@ ROLE_USER = "user"
 ROLE_STAFF = "staff"
 NAME_PATTERN = re.compile(r"^[A-Za-z ]+$")
 GUEST_NAME_CLEANUP_PATTERN = re.compile(r"[^A-Za-z ]+")
+STAFF_NAME_PATTERN = re.compile(r"^[A-Za-z0-9 ]+$")
+STAFF_NAME_CLEANUP_PATTERN = re.compile(r"[^A-Za-z0-9 ]+")
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]{3,15}$")
 USER_PASSWORD_PATTERN = r"(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}"
 ADMIN_PASSWORD_PATTERN = r"(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}"

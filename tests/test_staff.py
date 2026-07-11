@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import app as app_module
 from flask import render_template
 from constants import STAFF_SESSION_COOKIE_NAME
-from models import Staff, StaffAccess, User
+from models import Guests, Staff, StaffAccess, User
 
 
 class StaffRouteTest(unittest.TestCase):
@@ -172,6 +172,114 @@ class StaffRouteTest(unittest.TestCase):
         self.assertIn('minlength="8"', html)
         self.assertIn('pattern="(08[0-9]{6,}|8[0-9]{7,})"', html)
         self.assertIn("addGuestPhoneFullInput.value = `62${localNumber}`;", html)
+
+    # Fungsi untuk memastikan halaman Data staff tidak menampilkan tombol hapus baris.
+    def test_staff_data_template_hides_delete_button(self):
+        guest = SimpleNamespace(
+            id=77,
+            nama="Tamu Staff",
+            no_hp="6281200770001",
+            email=None,
+            status="Reguler",
+            added_by="Staff 1",
+            kehadiran=None,
+            verified_by_staff_name=None,
+        )
+        with app_module.app.test_request_context("/staff/data"):
+            html = render_template(
+                "user_data.html",
+                layout_template="staff_layout.html",
+                allow_guest_upload=False,
+                allow_guest_delete=False,
+                show_guest_qr_column=False,
+                data_endpoint="staff.staff_data",
+                add_guest_endpoint="staff.add_staff_guest",
+                status_endpoint="staff.update_staff_guest_status",
+                delete_endpoint="staff.delete_staff_guest_row",
+                user="Staff Test",
+                message="",
+                guests=[guest],
+                total_guests=1,
+                pagination=SimpleNamespace(page=1, pages=1, has_prev=False, has_next=False),
+                search="",
+                sort_by="attendance_desc",
+                per_page=10,
+                guest_status_options=("Reguler", "VIP"),
+                default_guest_status="Reguler",
+            )
+
+        self.assertIn("Edit", html)
+        self.assertNotIn('class="danger-button table-action-button guest-delete-toggle"', html)
+
+    # Fungsi untuk memastikan route hapus tamu staff menolak request langsung.
+    def test_staff_delete_guest_route_is_forbidden(self):
+        username = "staff_delete_forbidden_owner"
+        with app_module.app.app_context():
+            StaffAccess.query.filter_by(token_hash="staff-delete-forbidden-token").delete()
+            existing_owner = User.query.filter_by(username=username).first()
+            if existing_owner:
+                Guests.query.filter_by(user_id=existing_owner.id).delete()
+                for existing_staff in Staff.query.filter_by(owner_user_id=existing_owner.id).all():
+                    StaffAccess.query.filter_by(staff_id=existing_staff.id).delete()
+                    app_module.db.session.delete(existing_staff)
+                app_module.db.session.delete(existing_owner)
+                app_module.db.session.commit()
+
+            owner = User()
+            owner.username = username
+            owner.nama = "Staff Delete Owner"
+            owner.email = f"{username}@example.com"
+            owner.no_hp = 628120050099
+            owner.role = app_module.ROLE_USER
+            app_module.db.session.add(owner)
+            app_module.db.session.commit()
+
+            staff = Staff()
+            staff.owner_user_id = owner.id
+            staff.nama = "Staff Delete"
+            staff.no_hp = "628120050098"
+            app_module.db.session.add(staff)
+            app_module.db.session.commit()
+
+            guest = Guests()
+            guest.no = 1
+            guest.nama = "Guest Delete"
+            guest.no_hp = "628120050097"
+            guest.status = app_module.DEFAULT_GUEST_STATUS
+            guest.user_id = owner.id
+            app_module.db.session.add(guest)
+
+            staff_access = StaffAccess()
+            staff_access.staff_id = staff.id
+            staff_access.token_hash = "staff-delete-forbidden-token"
+            staff_access.pin_hash = "pin"
+            staff_access.last_activity_at = app_module.staff_service.get_utc_naive_datetime()
+            app_module.db.session.add(staff_access)
+            app_module.db.session.commit()
+
+            guest_id = guest.id
+            session_cookie = app_module.staff_service.get_staff_session_serializer().dumps(
+                {"staff_access_id": staff_access.id}
+            )
+
+        try:
+            self.client.set_cookie(STAFF_SESSION_COOKIE_NAME, session_cookie)
+            response = self.client.post(f"/staff/guests/{guest_id}/delete")
+
+            self.assertEqual(response.status_code, 403)
+            self.assertIn("Staff tidak diizinkan menghapus data tamu.", response.get_data(as_text=True))
+            with app_module.app.app_context():
+                self.assertIsNotNone(app_module.db.session.get(Guests, guest_id))
+        finally:
+            with app_module.app.app_context():
+                owner = User.query.filter_by(username=username).first()
+                if owner:
+                    Guests.query.filter_by(user_id=owner.id).delete()
+                    for staff in Staff.query.filter_by(owner_user_id=owner.id).all():
+                        StaffAccess.query.filter_by(staff_id=staff.id).delete()
+                        app_module.db.session.delete(staff)
+                    app_module.db.session.delete(owner)
+                    app_module.db.session.commit()
 
 
 if __name__ == "__main__":

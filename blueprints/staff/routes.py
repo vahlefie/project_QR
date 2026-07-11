@@ -222,29 +222,17 @@ def create_staff_blueprint(deps):
         )
         return deps.build_staff_guest_table_redirect()
 
-    # Fungsi untuk menghapus baris data tamu oleh staff.
+    # Fungsi untuk menolak penghapusan baris data tamu oleh staff.
     @staff_bp.route("/staff/guests/<int:guest_id>/delete", methods=["POST"])
     @deps.staff_login_required
-    # Route untuk menghapus tamu melalui staff.
+    # Route lama untuk memastikan staff tetap tidak bisa menghapus data via request langsung.
     def delete_staff_guest_row(guest_id):
         staff = deps.get_current_staff()
         if not staff:
             response = redirect(url_for("staff.staff_session_expired"))
             return deps.delete_staff_session_cookie(response)
 
-        guest = deps.get_accessible_staff_guest(staff, guest_id)
-        if not guest:
-            return "Data tamu tidak ditemukan", 404
-
-        deleted_guest_details = {
-            "guest_id": guest.id,
-            "owner_user_id": guest.user_id,
-            "guest_name": guest.nama,
-        }
-        deps.db.session.delete(guest)
-        deps.db.session.commit()
-        deps.log_staff_activity_event("DELETE_GUEST_ROW", staff, details=deleted_guest_details)
-        return deps.build_staff_guest_table_redirect()
+        return "Staff tidak diizinkan menghapus data tamu.", 403
 
     # Fungsi untuk mengambil popup request verifikasi kehadiran terbaru untuk staff.
     @staff_bp.route("/staff/attendance-notification")

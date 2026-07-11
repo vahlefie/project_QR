@@ -17,6 +17,8 @@ from constants import (
     GUEST_PHONE_MIN_LENGTH,
     PENDING_UPLOAD_SESSION_KEY,
     ROLE_USER,
+    STAFF_NAME_CLEANUP_PATTERN,
+    STAFF_NAME_PATTERN,
 )
 from exceptions import UploadValidationError
 from extensions import db
@@ -206,7 +208,26 @@ def is_allowed_phone_input(value):
 
 # Fungsi untuk membersihkan nama staff.
 def clean_staff_name(value):
-    return clean_guest_name(value)
+    if pd.isna(value):
+        return ""
+
+    text_value = str(value).strip()
+    if not text_value or not STAFF_NAME_PATTERN.fullmatch(text_value):
+        return ""
+
+    text_value = STAFF_NAME_CLEANUP_PATTERN.sub(" ", text_value)
+    text_value = " ".join(text_value.split())
+    if not text_value:
+        return ""
+    return text_value.title()[:GUEST_ADDED_BY_MAX_LENGTH]
+
+
+# Fungsi untuk memeriksa input nama staff hanya memakai huruf, angka, dan spasi.
+def is_valid_staff_name(value):
+    if pd.isna(value):
+        return False
+    text_value = str(value).strip()
+    return bool(text_value and STAFF_NAME_PATTERN.fullmatch(text_value))
 
 
 # Fungsi untuk membersihkan nomor HP staff.

@@ -33,7 +33,15 @@
             </label>
             <label>
                 <span>Nama</span>
-                <input type="text" name="nama" value="{{ form_data.get('nama', '') }}" maxlength="35" required>
+                <input
+                    type="text"
+                    name="nama"
+                    value="{{ form_data.get('nama', '') }}"
+                    maxlength="35"
+                    pattern="[A-Za-z0-9 ]+"
+                    title="Nama staff hanya boleh berisi huruf dan angka"
+                    required
+                >
             </label>
         </div>
 
@@ -47,6 +55,7 @@
     <h3>Daftar Staff</h3>
     {% set staff_attendance_url_states = staff_attendance_url_states|default({}) %}
     {% set staff_attendance_qr_urls = staff_attendance_qr_urls|default({}) %}
+    {% set staff_attendance_urls = staff_attendance_urls|default({}) %}
 
     {% if not staff_members %}
         <p>Belum ada staff.</p>
@@ -68,10 +77,54 @@
                     {% set staff_state = staff_states.get(staff.id, {}) %}
                     {% set attendance_url_state = staff_attendance_url_states.get(staff.id, {}) %}
                     {% set attendance_qr_url = staff_attendance_qr_urls.get(staff.id, '') %}
-                    <tr data-staff-row="{{ staff.id }}">
+                    {% set attendance_url = staff_attendance_urls.get(staff.id, '') %}
+                    <tr
+                        id="staff-row-{{ staff.id }}"
+                        data-staff-row="{{ staff.id }}"
+                        data-staff-is-active="{{ 'true' if staff_state.get('is_active') else 'false' }}"
+                        data-staff-is-blocked="{{ 'true' if staff_state.get('is_blocked') else 'false' }}"
+                    >
                         <td>{{ loop.index }}</td>
-                        <td>{{ staff.no_hp }}</td>
-                        <td>{{ staff.nama }}</td>
+                        <td class="editable-cell">
+                            <span class="read-value">{{ staff.no_hp }}</span>
+                            <div class="phone-input edit-control">
+                                <span>+62</span>
+                                <input
+                                    form="staff-edit-form-{{ staff.id }}"
+                                    id="staffPhoneEditLocal-{{ staff.id }}"
+                                    class="staff-edit-phone-local"
+                                    type="text"
+                                    inputmode="numeric"
+                                    minlength="8"
+                                    pattern="(08[0-9]{6,}|8[0-9]{7,})"
+                                    title="No HP minimal 8 digit, hanya angka, dan harus diawali 08 atau 8"
+                                    value="{% if staff.no_hp.startswith('62') %}{{ staff.no_hp[2:] }}{% else %}{{ staff.no_hp }}{% endif %}"
+                                    required
+                                >
+                                <input
+                                    form="staff-edit-form-{{ staff.id }}"
+                                    id="staffPhoneEditFull-{{ staff.id }}"
+                                    class="staff-edit-phone-full"
+                                    type="hidden"
+                                    name="no_hp"
+                                    value="{{ staff.no_hp }}"
+                                >
+                            </div>
+                        </td>
+                        <td class="editable-cell">
+                            <span class="read-value">{{ staff.nama }}</span>
+                            <input
+                                form="staff-edit-form-{{ staff.id }}"
+                                class="edit-control"
+                                type="text"
+                                name="nama"
+                                value="{{ staff.nama }}"
+                                maxlength="35"
+                                pattern="[A-Za-z0-9 ]+"
+                                title="Nama staff hanya boleh berisi huruf dan angka"
+                                required
+                            >
+                        </td>
                         <td>
                             <div class="action-group">
                                 <form
@@ -79,14 +132,40 @@
                                     method="POST"
                                     class="inline-action-form staff-login-form {% if staff_state.get('is_active') or staff_state.get('is_blocked') %}is-hidden{% endif %}"
                                     target="_blank"
+                                    data-staff-action-row="staff-row-{{ staff.id }}"
                                     data-staff-id="{{ staff.id }}"
                                 >
                                     <button type="submit" class="table-action-button">Login</button>
                                 </form>
                                 <form
+                                    id="staff-edit-form-{{ staff.id }}"
+                                    action="{{ url_for('client_staff.update_staff', staff_id=staff.id) }}"
+                                    method="POST"
+                                    class="inline-action-form staff-edit-form"
+                                ></form>
+                                <button
+                                    type="button"
+                                    class="table-action-button staff-edit-toggle"
+                                    data-staff-action-row="staff-row-{{ staff.id }}"
+                                    data-row-id="staff-row-{{ staff.id }}"
+                                    data-form-id="staff-edit-form-{{ staff.id }}"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    type="button"
+                                    class="danger-button table-action-button staff-edit-cancel is-hidden"
+                                    data-staff-action-row="staff-row-{{ staff.id }}"
+                                    data-row-id="staff-row-{{ staff.id }}"
+                                    data-form-id="staff-edit-form-{{ staff.id }}"
+                                >
+                                    Batal
+                                </button>
+                                <form
                                     action="{{ url_for('client_staff.logout_staff_from_client', staff_id=staff.id) }}"
                                     method="POST"
                                     class="inline-action-form staff-logout-form {% if not staff_state.get('is_active') or staff_state.get('is_blocked') %}is-hidden{% endif %}"
+                                    data-staff-action-row="staff-row-{{ staff.id }}"
                                     data-staff-id="{{ staff.id }}"
                                 >
                                     <button type="submit" class="success-button table-action-button">
@@ -97,6 +176,7 @@
                                     action="{{ url_for('client_staff.block_staff', staff_id=staff.id) }}"
                                     method="POST"
                                     class="inline-action-form staff-block-form {% if staff_state.get('is_blocked') %}is-hidden{% endif %}"
+                                    data-staff-action-row="staff-row-{{ staff.id }}"
                                     data-staff-id="{{ staff.id }}"
                                 >
                                     <button
@@ -112,6 +192,7 @@
                                     action="{{ url_for('client_staff.unblock_staff', staff_id=staff.id) }}"
                                     method="POST"
                                     class="inline-action-form staff-unblock-form {% if not staff_state.get('is_blocked') %}is-hidden{% endif %}"
+                                    data-staff-action-row="staff-row-{{ staff.id }}"
                                     data-staff-id="{{ staff.id }}"
                                 >
                                     <button type="submit" class="secondary-button table-action-button">
@@ -132,9 +213,18 @@
                                         data-staff-name="{{ staff.nama or staff.no_hp }}"
                                         data-last-generated="{{ attendance_url_state.get('generated_at_text', 'Belum pernah dibuat') }}"
                                         data-qr-link-id="staff-attendance-qr-link-{{ staff.id }}"
+                                        data-open-link-id="staff-attendance-open-link-{{ staff.id }}"
                                     >
                                         Generate
                                     </button>
+                                    <a
+                                        id="staff-attendance-open-link-{{ staff.id }}"
+                                        class="button-link secondary-button table-action-button staff-attendance-open-button {% if not attendance_url %}is-disabled{% endif %}"
+                                        {% if attendance_url %}href="{{ attendance_url }}" target="_blank" rel="noopener"{% endif %}
+                                        aria-disabled="{{ 'false' if attendance_url else 'true' }}"
+                                    >
+                                        Buka
+                                    </a>
                                     <a
                                         id="staff-attendance-qr-link-{{ staff.id }}"
                                         class="button-link table-action-button staff-attendance-qr-button {% if not attendance_qr_url %}is-disabled{% endif %}"
@@ -255,15 +345,19 @@ let activeStaffLogPayload = null;
 let pendingStaffAttendanceButton = null;
 let generatedStaffAttendanceUrl = "";
 
-staffForm.addEventListener("submit", () => {
-    let localNumber = staffPhoneLocalInput.value.trim();
+const buildFullPhoneNumber = (input) => {
+    let localNumber = input.value.trim();
     if (localNumber.startsWith("62")) {
         localNumber = localNumber.slice(2);
     }
     if (localNumber.startsWith("0")) {
         localNumber = localNumber.slice(1);
     }
-    staffPhoneFullInput.value = `62${localNumber}`;
+    return `62${localNumber}`;
+};
+
+staffForm.addEventListener("submit", () => {
+    staffPhoneFullInput.value = buildFullPhoneNumber(staffPhoneLocalInput);
 });
 
 const toggleElement = (element, isVisible) => {
@@ -271,6 +365,16 @@ const toggleElement = (element, isVisible) => {
         return;
     }
     element.classList.toggle("is-hidden", !isVisible);
+};
+
+const findStaffRowAction = (row, selector) => {
+    return row.querySelector(selector)
+        || document.querySelector(`${selector}[data-row-id="${row.id}"]`)
+        || document.querySelector(`${selector}[data-staff-action-row="${row.id}"]`);
+};
+
+const getStaffRowActionControls = (row) => {
+    return Array.from(document.querySelectorAll(`[data-staff-action-row="${row.id}"]`));
 };
 
 const setStaffRowState = (staffId, state) => {
@@ -281,15 +385,106 @@ const setStaffRowState = (staffId, state) => {
 
     const isBlocked = Boolean(state.is_blocked);
     const isActive = Boolean(state.is_active);
-    toggleElement(row.querySelector(".staff-login-form"), !isBlocked && !isActive);
-    toggleElement(row.querySelector(".staff-logout-form"), !isBlocked && isActive);
-    toggleElement(row.querySelector(".staff-block-form"), !isBlocked);
-    toggleElement(row.querySelector(".staff-unblock-form"), isBlocked);
+    row.dataset.staffIsBlocked = String(isBlocked);
+    row.dataset.staffIsActive = String(isActive);
+    if (row.classList.contains("is-editing")) {
+        return;
+    }
+    toggleElement(findStaffRowAction(row, ".staff-login-form"), !isBlocked && !isActive);
+    toggleElement(findStaffRowAction(row, ".staff-logout-form"), !isBlocked && isActive);
+    toggleElement(findStaffRowAction(row, ".staff-block-form"), !isBlocked);
+    toggleElement(findStaffRowAction(row, ".staff-unblock-form"), isBlocked);
 };
 
 document.querySelectorAll(".staff-login-form").forEach((form) => {
     form.addEventListener("submit", () => {
         setStaffRowState(form.dataset.staffId, { is_active: true, is_blocked: false });
+    });
+});
+
+const setStaffRowEditing = (row, form, isEditing, resetForm = false) => {
+    const editButton = findStaffRowAction(row, ".staff-edit-toggle");
+    const cancelButton = findStaffRowAction(row, ".staff-edit-cancel");
+    if (!editButton || !cancelButton) {
+        return;
+    }
+
+    if (resetForm && form) {
+        form.reset();
+    }
+
+    row.classList.toggle("is-editing", isEditing);
+    editButton.dataset.editing = String(isEditing);
+    editButton.textContent = isEditing ? "Simpan" : "Edit";
+    toggleElement(cancelButton, isEditing);
+
+    getStaffRowActionControls(row).forEach((control) => {
+        if (control === editButton || control === cancelButton) {
+            return;
+        }
+
+        if (isEditing) {
+            if (!control.classList.contains("is-hidden")) {
+                control.dataset.hiddenForStaffEdit = "true";
+            }
+            control.classList.add("is-hidden");
+            return;
+        }
+
+        if (control.dataset.hiddenForStaffEdit === "true") {
+            control.classList.remove("is-hidden");
+        }
+        delete control.dataset.hiddenForStaffEdit;
+    });
+
+    if (!isEditing) {
+        setStaffRowState(row.dataset.staffRow, {
+            is_active: row.dataset.staffIsActive === "true",
+            is_blocked: row.dataset.staffIsBlocked === "true",
+        });
+    }
+
+    document.dispatchEvent(new CustomEvent("guest-row-editing-change", {
+        detail: { row, isEditing },
+    }));
+};
+
+document.querySelectorAll(".staff-edit-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+        const row = document.getElementById(button.dataset.rowId);
+        const form = document.getElementById(button.dataset.formId);
+        if (!row || !form) {
+            return;
+        }
+
+        if (button.dataset.editing === "true") {
+            const localPhoneInput = row.querySelector(".staff-edit-phone-local");
+            const fullPhoneInput = row.querySelector(".staff-edit-phone-full");
+            if (localPhoneInput && fullPhoneInput) {
+                fullPhoneInput.value = buildFullPhoneNumber(localPhoneInput);
+            }
+            form.requestSubmit();
+            return;
+        }
+
+        setStaffRowEditing(row, form, true);
+        const firstControl = row.querySelector(
+            "input.edit-control, select.edit-control, textarea.edit-control, .edit-control input, .edit-control select, .edit-control textarea"
+        );
+        if (firstControl) {
+            firstControl.focus();
+        }
+    });
+});
+
+document.querySelectorAll(".staff-edit-cancel").forEach((button) => {
+    button.addEventListener("click", () => {
+        const row = document.getElementById(button.dataset.rowId);
+        const form = document.getElementById(button.dataset.formId);
+        if (!row || !form) {
+            return;
+        }
+        setStaffRowEditing(row, form, false, true);
     });
 });
 
@@ -350,6 +545,31 @@ const updateStaffAttendanceQrButton = (button, attendanceQrUrl = "") => {
     }
 };
 
+const updateStaffAttendanceOpenButton = (button, attendanceUrl = "") => {
+    if (!button || !button.dataset.openLinkId) {
+        return;
+    }
+
+    const openLink = document.getElementById(button.dataset.openLinkId);
+    if (!openLink) {
+        return;
+    }
+
+    if (attendanceUrl) {
+        openLink.href = attendanceUrl;
+        openLink.target = "_blank";
+        openLink.rel = "noopener";
+        openLink.classList.remove("is-disabled");
+        openLink.setAttribute("aria-disabled", "false");
+    } else {
+        openLink.removeAttribute("href");
+        openLink.removeAttribute("target");
+        openLink.removeAttribute("rel");
+        openLink.classList.add("is-disabled");
+        openLink.setAttribute("aria-disabled", "true");
+    }
+};
+
 const showStaffAttendanceUrlResult = (message, attendanceUrl = "") => {
     generatedStaffAttendanceUrl = attendanceUrl;
     staffAttendanceUrlTitle.textContent = "URL Client";
@@ -378,6 +598,7 @@ const generateStaffAttendanceUrl = async () => {
         }
 
         pendingStaffAttendanceButton.dataset.lastGenerated = payload.generated_at || attendanceUrlNeverGeneratedText;
+        updateStaffAttendanceOpenButton(pendingStaffAttendanceButton, payload.attendance_url || "");
         updateStaffAttendanceQrButton(pendingStaffAttendanceButton, payload.attendance_qr_url || "");
         showStaffAttendanceUrlResult(payload.message || "URL publik sudah dibuat.", payload.attendance_url || "");
     } catch (error) {

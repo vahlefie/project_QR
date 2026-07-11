@@ -765,6 +765,11 @@ def get_client_staff_members(owner_user):
     return staff_service.get_client_staff_members(owner_user)
 
 
+# Fungsi untuk menghapus semua staff milik client
+def delete_client_staff_members(owner_user):
+    return staff_service.delete_client_staff_members(owner_user)
+
+
 # Fungsi untuk membuat status ringkas staff untuk UI client
 def build_staff_status_item(staff):
     return staff_service.build_staff_status_item(staff)
@@ -785,9 +790,15 @@ def build_staff_page_context(current_user, error=None, form_data=None):
     return staff_service.build_staff_page_context(current_user, error=error, form_data=form_data)
 
 
-# Fungsi untuk memvalidasi input staff baru milik client
-def validate_staff_form(owner_user, nama, no_hp):
-    return staff_service.validate_staff_form(owner_user, nama, no_hp)
+# Fungsi untuk memvalidasi input staff milik client
+def validate_staff_form(owner_user, nama, no_hp, exclude_staff_id=None, raw_nama=None):
+    return staff_service.validate_staff_form(
+        owner_user,
+        nama,
+        no_hp,
+        exclude_staff_id=exclude_staff_id,
+        raw_nama=raw_nama,
+    )
 
 
 # Fungsi untuk membuat keyword pencarian staff pada log utama
@@ -901,9 +912,14 @@ def clean_guest_phone(value):
     return guest_service.clean_guest_phone(value)
 
 
-# Fungsi untuk membersihkan nama staff dengan aturan nama tamu
+# Fungsi untuk membersihkan nama staff dengan aturan alfanumerik staff
 def clean_staff_name(value):
     return guest_service.clean_staff_name(value)
+
+
+# Fungsi untuk memeriksa nama staff hanya memakai huruf dan angka
+def is_valid_staff_name(value):
+    return guest_service.is_valid_staff_name(value)
 
 
 # Fungsi untuk membersihkan nomor HP staff dengan aturan nomor HP tamu
@@ -1252,6 +1268,7 @@ def build_blueprint_dependencies():
         confirm_attendance_verification_request=confirm_attendance_verification_request,
         create_staff_access=create_staff_access,
         db=db,
+        delete_client_staff_members=delete_client_staff_members,
         delete_staff_session_cookie=delete_staff_session_cookie,
         end_login_session=end_login_session,
         find_login_throttle=find_login_throttle,
@@ -1297,6 +1314,7 @@ def build_blueprint_dependencies():
         is_premium_user=is_premium_user,
         is_login_throttle_locked=is_login_throttle_locked,
         is_staff_access_idle_expired=is_staff_access_idle_expired,
+        is_valid_staff_name=is_valid_staff_name,
         is_valid_password_for_role=is_valid_password_for_role,
         load_pending_guest_upload=load_pending_guest_upload,
         log_activity_event=log_activity_event,

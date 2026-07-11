@@ -227,6 +227,7 @@ def build_staff_guest_context(staff, search, page, per_page, sort_by):
     context["add_guest_endpoint"] = "staff.add_staff_guest"
     context["status_endpoint"] = "staff.update_staff_guest_status"
     context["delete_endpoint"] = "staff.delete_staff_guest_row"
+    context["allow_guest_delete"] = False
     return context
 
 

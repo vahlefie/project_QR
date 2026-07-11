@@ -4,6 +4,7 @@
 {% set allow_upload = allow_guest_upload|default(true) %}
 {% set allow_mutations = allow_guest_mutations|default(true) %}
 {% set allow_export = allow_guest_export|default(allow_upload) %}
+{% set allow_delete = allow_guest_delete|default(allow_mutations) %}
 {% set show_table = show_guest_table|default(true) %}
 {% set data_route = data_endpoint|default("user_data") %}
 {% set add_guest_route = add_guest_endpoint|default("add_user_guest") %}
@@ -203,24 +204,26 @@
                                     >
                                         Edit
                                     </button>
-                                    <form
-                                        action="{{ url_for(delete_route, guest_id=guest.id) }}"
-                                        method="POST"
-                                        class="inline-action-form"
-                                    >
-                                        <input type="hidden" name="search" value="{{ search }}">
-                                        <input type="hidden" name="page" value="{{ pagination.page }}">
-                                        <input type="hidden" name="per_page" value="{{ per_page }}">
-                                        <input type="hidden" name="sort_by" value="{{ sort_by }}">
-                                        <button
-                                            type="submit"
-                                            class="danger-button table-action-button guest-delete-toggle"
-                                            data-row-id="guest-row-{{ guest.id }}"
-                                            data-confirm-message="Yakin hapus data tamu ini?"
+                                    {% if allow_delete %}
+                                        <form
+                                            action="{{ url_for(delete_route, guest_id=guest.id) }}"
+                                            method="POST"
+                                            class="inline-action-form"
                                         >
-                                            Hapus
-                                        </button>
-                                    </form>
+                                            <input type="hidden" name="search" value="{{ search }}">
+                                            <input type="hidden" name="page" value="{{ pagination.page }}">
+                                            <input type="hidden" name="per_page" value="{{ per_page }}">
+                                            <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                            <button
+                                                type="submit"
+                                                class="danger-button table-action-button guest-delete-toggle"
+                                                data-row-id="guest-row-{{ guest.id }}"
+                                                data-confirm-message="Yakin hapus data tamu ini?"
+                                            >
+                                                Hapus
+                                            </button>
+                                        </form>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

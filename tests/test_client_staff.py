@@ -41,6 +41,7 @@ class ClientStaffRouteTest(unittest.TestCase):
     def test_client_staff_routes_require_login(self):
         protected_requests = (
             ("get", "/user/staff"),
+            ("post", "/user/staff/1/update"),
             ("post", "/user/staff/1/login"),
             ("post", "/user/staff/1/logout"),
             ("post", "/user/staff/1/attendance-url/generate"),
@@ -62,6 +63,7 @@ class ClientStaffRouteTest(unittest.TestCase):
         endpoints = {rule.endpoint for rule in app_module.app.url_map.iter_rules()}
 
         self.assertIn("client_staff.user_staff", endpoints)
+        self.assertIn("client_staff.update_staff", endpoints)
         self.assertIn("client_staff.login_staff", endpoints)
         self.assertIn("client_staff.generate_staff_attendance_url", endpoints)
         self.assertIn("client_staff.logout_staff_from_client", endpoints)
@@ -191,9 +193,46 @@ class ClientStaffRouteTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("URL Client", html)
         self.assertIn("Generate", html)
+        self.assertIn("Buka", html)
         self.assertIn("QR Client", html)
+        self.assertIn("Edit", html)
+        self.assertIn("staff-edit-cancel", html)
+        self.assertIn("Batal", html)
+        self.assertIn("setStaffRowEditing", html)
+        self.assertIn("hiddenForStaffEdit", html)
+        self.assertIn(f"/user/staff/{staff_id}/update", html)
         self.assertIn(f"/user/staff/{staff_id}/attendance-url/generate", html)
         self.assertIn('aria-disabled="true"', html)
+
+    # Fungsi untuk memastikan edit staff mengubah nama alfanumerik dan nomor HP.
+    def test_update_staff_allows_alphanumeric_name_and_updates_phone(self):
+        staff_id = self.create_active_client_with_staff("active_staff_update")
+
+        response = self.client.post(
+            f"/user/staff/{staff_id}/update",
+            data={"nama": "Staff 2", "no_hp": "08120030199"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/user/staff", response.location)
+
+        with app_module.app.app_context():
+            staff = app_module.db.session.get(Staff, staff_id)
+            self.assertEqual(staff.nama, "Staff 2")
+            self.assertEqual(staff.no_hp, "628120030199")
+
+    # Fungsi untuk memastikan nama staff dengan karakter selain huruf/angka ditolak.
+    def test_update_staff_rejects_non_alphanumeric_name(self):
+        staff_id = self.create_active_client_with_staff("active_staff_bad_name")
+
+        response = self.client.post(
+            f"/user/staff/{staff_id}/update",
+            data={"nama": "Staff #2", "no_hp": "08120030102"},
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Nama staff hanya boleh berisi huruf dan angka.", response.get_data(as_text=True))
 
     # Fungsi untuk memastikan generate URL Staff membuat token dan QR per staff.
     def test_generate_staff_attendance_url_creates_staff_public_link(self):

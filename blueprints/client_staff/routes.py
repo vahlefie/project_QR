@@ -28,6 +28,10 @@ def create_client_staff_blueprint(deps):
             staff.id: deps.build_staff_attendance_qr_url(staff)
             for staff in staff_members
         }
+        context["staff_attendance_urls"] = {
+            staff.id: deps.build_staff_attendance_url(staff)
+            for staff in staff_members
+        }
         return context
 
     # Fungsi untuk menampilkan dan menambahkan staff milik client.
@@ -49,7 +53,7 @@ def create_client_staff_blueprint(deps):
             }
             no_hp = deps.clean_staff_phone(form_data["no_hp"])
             nama = deps.clean_staff_name(form_data["nama"])
-            error = deps.validate_staff_form(current_user, nama, no_hp)
+            error = deps.validate_staff_form(current_user, nama, no_hp, raw_nama=form_data["nama"])
 
             if error:
                 context = build_client_staff_page_context(current_user, error=error, form_data=form_data)
@@ -73,6 +77,59 @@ def create_client_staff_blueprint(deps):
             return deps.build_staff_redirect(message="Staff berhasil ditambahkan.")
 
         return render_template("user_staff.html", **build_client_staff_page_context(current_user))
+
+    # Fungsi untuk memperbarui nomor HP dan nama staff milik client.
+    @client_staff_bp.route("/user/staff/<int:staff_id>/update", methods=["POST"])
+    @deps.login_required
+    @deps.role_required(deps.ROLE_USER)
+    # Route untuk menyimpan edit staff dari tabel Staff.
+    def update_staff(staff_id):
+        current_user = deps.get_current_user()
+        if not current_user:
+            return redirect("/login")
+        if not is_active_client(current_user):
+            return inactive_client_response()
+
+        staff = deps.Staff.query.filter_by(id=staff_id, owner_user_id=current_user.id).first()
+        if not staff:
+            return deps.build_staff_redirect(error="Staff tidak ditemukan.")
+
+        form_data = {
+            "no_hp": request.form.get("no_hp", ""),
+            "nama": request.form.get("nama", ""),
+        }
+        no_hp = deps.clean_staff_phone(form_data["no_hp"])
+        nama = deps.clean_staff_name(form_data["nama"])
+        error = deps.validate_staff_form(
+            current_user,
+            nama,
+            no_hp,
+            exclude_staff_id=staff.id,
+            raw_nama=form_data["nama"],
+        )
+        if error:
+            return deps.build_staff_redirect(error=error)
+
+        old_profile = {
+            "staff_name": staff.nama,
+            "staff_no_hp": staff.no_hp,
+        }
+        staff.nama = nama
+        staff.no_hp = no_hp
+        deps.db.session.commit()
+        deps.log_activity_event(
+            "UPDATE_STAFF",
+            details={
+                "staff_id": staff.id,
+                "owner_user_id": current_user.id,
+                "old_profile": old_profile,
+                "new_profile": {
+                    "staff_name": staff.nama,
+                    "staff_no_hp": staff.no_hp,
+                },
+            },
+        )
+        return deps.build_staff_redirect(message="Staff berhasil diperbarui.")
 
     # Fungsi untuk generate URL publik dan QR Client milik staff.
     @client_staff_bp.route("/user/staff/<int:staff_id>/attendance-url/generate", methods=["POST"])

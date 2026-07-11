@@ -439,10 +439,11 @@ Route utama:
 - `POST /admin/users/<user_id>/attendance-url/generate` hanya kompatibilitas endpoint lama dan mengembalikan status `410 moved`.
 
 Halaman `/user/staff` client memiliki kolom `URL Client` di sebelah kanan kolom `Action`:
-- Setiap baris staff aktif menampilkan tombol `Generate` warna abu-abu dan tombol biru `QR Client`.
+- Setiap baris staff aktif menampilkan tombol `Generate`, `Buka`, dan `QR Client`.
 - Tombol `Generate` membuat/memperbarui URL publik milik staff pada baris tersebut.
+- Tombol `Buka` berwarna abu-abu, berada setelah `Generate`, dan membuka URL publik staff pada tab baru jika URL sudah pernah dibuat.
 - Tombol `QR Client` mengunduh QR PNG dari `/kehadiran/<attendance_token>/qr.png`. Isi QR adalah URL halaman verifikasi kehadiran milik staff, bukan token mentah.
-- Jika staff belum pernah generate URL, tombol `QR Client` tampil disabled sampai `Generate` berhasil.
+- Jika staff belum pernah generate URL, tombol `Buka` dan `QR Client` tampil disabled sampai `Generate` berhasil.
 - Jika URL belum pernah dibuat, klik `Generate` langsung membuat URL dan menampilkan popup notifikasi `URL publik sudah dibuat.`.
 - Jika URL sudah pernah dibuat, klik `Generate` membuka popup peringatan `Terakhir generate pada (tanggal terakhir generate).` lalu baris baru `Apakah akan membuat ulang URL?`.
 - Popup konfirmasi memiliki tombol `Ya` warna biru dan `Batal` warna merah.
@@ -556,6 +557,7 @@ Jika `nama` atau `no_hp` tidak valid, data tidak disimpan dan popup tetap terbuk
 Route utama client:
 - `GET /user/staff`
 - `POST /user/staff`
+- `POST /user/staff/<staff_id>/update`
 - `POST /user/staff/<staff_id>/login`
 - `POST /user/staff/<staff_id>/logout`
 - `POST /user/staff/<staff_id>/block`
@@ -569,11 +571,14 @@ Menu client:
 Halaman `Staff` client menampilkan:
 - Form tambah staff dengan input `Nomor HP`, `Nama`, dan tombol `Tambah Staff`.
 - Input nomor HP staff memakai UI prefix `+62` yang sama dengan halaman `Tambah Client` role admin.
+- Nama staff hanya boleh memakai huruf, angka, dan spasi. Input lain ditolak dengan peringatan validasi.
 - Tabel daftar staff tanpa search, sort, paging, dan total staff.
-- Kolom tabel staff: `No`, `Nomor HP`, `Nama`, `Action`.
+- Kolom tabel staff: `No`, `Nomor HP`, `Nama`, `Action`, `URL Client`, `Log`.
 - Kolom paling kanan `Log` berisi tombol `View`.
 - Action staff:
   - `Login`: membuka tab baru berisi URL random login staff dan PIN 6 digit.
+  - `Edit`: tombol biru setelah `Login` untuk mengubah nomor HP dan nama staff secara inline seperti edit data tamu.
+  - Saat mode edit aktif, tombol `Edit` berubah menjadi `Simpan` dan hanya tombol `Batal` merah yang tampil di sebelahnya untuk membatalkan edit.
   - `Logout`: mencabut akses aktif staff dari dashboard client.
   - `Block`: membuka popup peringatan dengan tombol `Ya` dan `Batal`, lalu memblokir staff dan mencabut semua akses aktifnya.
   - `Unblock`: melepas blokir staff.
@@ -629,9 +634,9 @@ Fitur Data staff:
 - Pagination.
 - Tambah tamu manual.
 - Edit status.
-- Hapus baris.
+- Tanpa hapus baris; tombol `Hapus` tidak ditampilkan di backend staff dan route hapus langsung menolak request dengan status 403.
 
-Staff hanya dapat menambah, mengedit status, dan menghapus data tamu dengan `Guests.user_id` yang sama dengan `owner_user_id` staff.
+Staff hanya dapat menambah dan mengedit status data tamu dengan `Guests.user_id` yang sama dengan `owner_user_id` staff.
 
 ## Data Tamu Role Admin dan Super Admin
 
@@ -762,6 +767,7 @@ Perilaku:
 
 Saat client reaktivasi atau membuat event baru:
 - Sistem membackup event sebelumnya terlebih dahulu jika `period_end` event lama sudah lewat.
+- Semua staff dari event sebelumnya dihapus setelah backup reaktivasi dimulai, sehingga event baru dimulai tanpa staff lama dan URL/PIN lama tidak dapat dipakai.
 - Semua file lama di folder backup event tersebut dikompresi menjadi `backup/event/<user_id>/<nama_event>_YYYY.tar.gz`.
 - Setelah arsip `tar.gz` berhasil dibuat dan diverifikasi, file CSV final dan file upload Excel lama yang sudah masuk arsip dihapus.
 - Event aktif berikutnya memakai nama event dari payment terbaru.
@@ -1197,6 +1203,10 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Verifikasi edit Data Tamu client 2026-07-09: `.venv\Scripts\python.exe -m py_compile app.py blueprints\guests\routes.py blueprints\registry.py blueprints\user\routes.py services\guest_service.py services\listing_service.py tests\test_guest_routes.py tests\test_user_routes.py`, targeted unittest `tests.test_guest_routes tests.test_user_routes tests.test_guest_service` berhasil menjalankan 19 test, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 112 test.
 - Fix 502 production 2026-07-09: Gunicorn gagal import karena syntax Python lama `except TypeError, ValueError:` di `app.py` dan regresi pola sama di `services/guest_service.py`; semua multiple exception sekarang memakai `except (A, B):`.
 - Verifikasi fix 502 production 2026-07-09: audit `rg` memastikan tidak ada pola `except A, B` tersisa, `.venv\Scripts\python.exe -m py_compile app.py services\guest_service.py`, audit AST seluruh file Python, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 112 test.
+- Update Staff client 2026-07-11: kolom `URL Client` menampilkan tombol `Buka` abu-abu setelah `Generate`, kolom `Action` menampilkan tombol `Edit` biru setelah `Login` untuk edit nomor HP/nama staff, nama staff valid alfanumerik, staff lama dihapus saat payment reaktivasi membuat event baru, dan backend staff tidak lagi bisa menghapus data tamu.
+- Verifikasi Staff client 2026-07-11: `.venv\Scripts\python.exe -m py_compile app.py constants.py services\guest_service.py services\staff_service.py services\listing_service.py blueprints\registry.py blueprints\client_staff\routes.py blueprints\staff\routes.py blueprints\admin\routes.py tests\test_client_staff.py tests\test_staff.py tests\test_admin_routes.py`, targeted unittest `tests.test_client_staff tests.test_staff tests.test_admin_routes tests.test_listing_service`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 117 test.
+- Update tombol edit Staff 2026-07-11: saat mode edit staff aktif, kolom Action hanya menampilkan `Simpan` dan `Batal` merah; `Batal` membatalkan edit dan mengembalikan tombol action sesuai status aktif/blokir staff.
+- Verifikasi tombol edit Staff 2026-07-11: `.venv\Scripts\python.exe -m py_compile tests\test_client_staff.py`, `.venv\Scripts\python.exe -m unittest tests.test_client_staff`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 117 test.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.

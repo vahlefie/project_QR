@@ -17,8 +17,8 @@ from constants import (
 from extensions import db
 from flask import current_app, g, redirect, request, url_for
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from models import Staff, StaffAccess
-from services import account_service, logging_service
+from models import AttendanceVerificationDismissal, AttendanceVerificationRequest, Guests, Staff, StaffAccess
+from services import account_service, guest_service, logging_service
 from werkzeug.security import generate_password_hash
 
 
@@ -310,6 +310,31 @@ def get_client_staff_members(owner_user):
     return Staff.query.filter_by(owner_user_id=owner_user.id).order_by(Staff.id.asc()).all()
 
 
+# Fungsi untuk menghapus seluruh staff milik client saat event lama diganti.
+def delete_client_staff_members(owner_user):
+    if not owner_user or not getattr(owner_user, "id", None):
+        return 0
+
+    staff_members = get_client_staff_members(owner_user)
+    staff_ids = [staff.id for staff in staff_members]
+    if not staff_ids:
+        return 0
+
+    Guests.query.filter(
+        Guests.user_id == owner_user.id,
+        Guests.verified_by_staff_id.in_(staff_ids),
+    ).update({"verified_by_staff_id": None}, synchronize_session=False)
+    AttendanceVerificationDismissal.query.filter(
+        AttendanceVerificationDismissal.staff_id.in_(staff_ids)
+    ).delete(synchronize_session=False)
+
+    for verification_request in AttendanceVerificationRequest.query.filter_by(owner_user_id=owner_user.id).all():
+        db.session.delete(verification_request)
+    for staff in staff_members:
+        db.session.delete(staff)
+    return len(staff_members)
+
+
 # Fungsi untuk membuat item status staff.
 def build_staff_status_item(staff):
     active_access = get_active_staff_access(staff)
@@ -350,10 +375,15 @@ def build_staff_page_context(current_user, error=None, form_data=None):
 
 
 # Fungsi untuk memvalidasi form staff.
-def validate_staff_form(owner_user, nama, no_hp):
+def validate_staff_form(owner_user, nama, no_hp, exclude_staff_id=None, raw_nama=None):
+    if raw_nama is not None and not guest_service.is_valid_staff_name(raw_nama):
+        return "Nama staff hanya boleh berisi huruf dan angka."
     if not nama or not no_hp:
         return "Nomor HP dan nama staff wajib diisi dengan format valid."
-    if Staff.query.filter_by(owner_user_id=owner_user.id, no_hp=no_hp).first():
+    query = Staff.query.filter_by(owner_user_id=owner_user.id, no_hp=no_hp)
+    if exclude_staff_id is not None:
+        query = query.filter(Staff.id != exclude_staff_id)
+    if query.first():
         return "Nomor HP staff sudah terdaftar untuk client ini."
     return None
 
@@ -392,6 +422,10 @@ def format_staff_log_message(payload):
         return "Client memblokir staff."
     if event_type == "UNBLOCK_STAFF":
         return "Client membuka blokir staff."
+    if event_type == "UPDATE_STAFF":
+        return "Client memperbarui nomor HP atau nama staff."
+    if event_type == "GENERATE_STAFF_ATTENDANCE_URL":
+        return "Client membuat atau memperbarui URL Client staff."
     if event_type == "BLOCK_STAFF_PIN_FAILED":
         failed_attempts = details.get("failed_pin_attempts", STAFF_PIN_MAX_ATTEMPTS)
         return f"PIN salah {failed_attempts} kali. Staff diblokir dan akses dicabut."
