@@ -28,10 +28,12 @@ def create_attendance_blueprint(deps):
         if page_state not in {"pending", "confirmed", "expired"}:
             page_state = "message"
         payload = attach_attendance_request_urls(payload, attendance_token)
+        attendance_event_name = deps.get_attendance_event_name(owner_user)
         return (
             render_template(
                 "guest_attendance.html",
                 owner_user=owner_user,
+                attendance_event_name=attendance_event_name,
                 verify_url=url_for("attendance.verify_guest_attendance_route", attendance_token=attendance_token),
                 is_available=True,
                 error_message="",
@@ -61,6 +63,7 @@ def create_attendance_blueprint(deps):
                 render_template(
                     "guest_attendance.html",
                     owner_user=None,
+                    attendance_event_name="",
                     verify_url="",
                     is_available=False,
                     error_message="Link verifikasi tidak valid.",
@@ -80,6 +83,7 @@ def create_attendance_blueprint(deps):
                 render_template(
                     "guest_attendance.html",
                     owner_user=owner_user,
+                    attendance_event_name=deps.get_attendance_event_name(owner_user),
                     verify_url="",
                     is_available=False,
                     error_message=deps.build_inactive_billing_period_message(),
@@ -90,6 +94,7 @@ def create_attendance_blueprint(deps):
         return render_template(
             "guest_attendance.html",
             owner_user=owner_user,
+            attendance_event_name=deps.get_attendance_event_name(owner_user),
             verify_url=url_for("attendance.verify_guest_attendance_route", attendance_token=attendance_token),
             is_available=True,
             error_message="",
@@ -234,6 +239,7 @@ def create_attendance_blueprint(deps):
                 render_template(
                     "guest_attendance.html",
                     owner_user=None,
+                    attendance_event_name="",
                     verify_url="",
                     is_available=False,
                     error_message="Link verifikasi tidak valid.",
@@ -246,6 +252,7 @@ def create_attendance_blueprint(deps):
                 render_template(
                     "guest_attendance.html",
                     owner_user=owner_user,
+                    attendance_event_name=deps.get_attendance_event_name(owner_user),
                     verify_url="",
                     is_available=False,
                     error_message=deps.build_inactive_billing_period_message(),

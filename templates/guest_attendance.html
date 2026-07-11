@@ -12,8 +12,8 @@
         <div class="card attendance-card">
             <h2>Verifikasi Kehadiran</h2>
 
-            {% if owner_user and is_available %}
-                <p class="attendance-owner">{{ owner_user.perusahaan or owner_user.nama or owner_user.username }}</p>
+            {% if is_available %}
+                <p class="attendance-owner">{{ attendance_event_name|default('Event', true) }}</p>
             {% endif %}
 
             {% if is_available and attendance_page_state == 'form' %}

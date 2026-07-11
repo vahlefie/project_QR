@@ -72,6 +72,7 @@ class EventArchiveServiceTest(unittest.TestCase):
             guest.no_hp = "62812345678"
             guest.email = "tamu@example.com"
             guest.status = "VIP"
+            guest.jumlah_orang = 3
             app_module.db.session.add(guest)
             app_module.db.session.commit()
             upload_dir = Path(app_module.app.instance_path) / "uploads"
@@ -89,9 +90,10 @@ class EventArchiveServiceTest(unittest.TestCase):
             self.assertEqual(archive.csv_path, str(csv_path))
             self.assertTrue(csv_path.exists())
             self.assertEqual(Guests.query.filter_by(user_id=client.id).count(), 0)
-            dataframe = pd.read_csv(csv_path, dtype=str).fillna("")
+            dataframe = pd.read_csv(csv_path, dtype=str, keep_default_na=False).fillna("")
             self.assertEqual(dataframe.iloc[0]["nama"], "Tamu Lama")
             self.assertEqual(dataframe.iloc[0]["status"], "VIP")
+            self.assertEqual(dataframe.iloc[0]["jumlah_orang"], "N/A")
             self.assertFalse(upload_path.exists())
             self.assertTrue((csv_path.parent / upload_path.name).exists())
 

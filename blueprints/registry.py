@@ -52,6 +52,7 @@ ATTENDANCE_DEPS = (
     "db",
     "format_attendance_time",
     "GUEST_QR_PAGE_TTL_SECONDS",
+    "get_attendance_event_name",
     "get_attendance_owner_from_token",
     "get_attendance_staff_from_token",
     "get_guest_attendance_verification_status",

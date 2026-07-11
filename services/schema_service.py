@@ -114,6 +114,19 @@ def ensure_guests_user_schema():
         db.session.commit()
         guest_columns.add("verified_by_staff_name")
 
+    if "jumlah_orang" not in guest_columns:
+        db.session.execute(text("ALTER TABLE guests ADD COLUMN jumlah_orang INTEGER NOT NULL DEFAULT 1"))
+        db.session.commit()
+        guest_columns.add("jumlah_orang")
+
+    db.session.execute(
+        text(
+            "UPDATE guests SET jumlah_orang = 1 "
+            "WHERE jumlah_orang IS NULL OR jumlah_orang < 1 OR jumlah_orang > 9"
+        )
+    )
+    db.session.commit()
+
     db.session.execute(
         text(CLEANUP_GUEST_STATUS_SQL),
         {"default_status": DEFAULT_GUEST_STATUS},

@@ -88,6 +88,7 @@
                             <th>Status</th>
                             <th>Ditambahkan</th>
                             <th>Kehadiran</th>
+                            <th>Jumlah Orang</th>
                             <th>Verifikasi</th>
                             {% if show_qr_column %}
                                 <th>QR Code</th>
@@ -167,6 +168,7 @@
                             </td>
                             <td>{{ guest.added_by or 'N/A' }}</td>
                             <td>{{ guest.kehadiran|attendance_time }}</td>
+                            <td>{{ (guest.jumlah_orang or 1) if guest.kehadiran else 'N/A' }}</td>
                             <td>{{ guest.verified_by_staff_name or 'N/A' }}</td>
                             {% if show_qr_column %}
                                 <td>
@@ -334,10 +336,6 @@
         </div>
         <dl class="detail-list staff-verification-details">
             <div>
-                <dt>Nama</dt>
-                <dd id="staffVerificationGuestName">N/A</dd>
-            </div>
-            <div>
                 <dt>No HP</dt>
                 <dd id="staffVerificationGuestPhone">N/A</dd>
             </div>
@@ -348,6 +346,16 @@
             <div>
                 <dt>Status</dt>
                 <dd id="staffVerificationGuestStatus">N/A</dd>
+            </div>
+            <div>
+                <dt>Jumlah Orang</dt>
+                <dd>
+                    <select id="staffVerificationGuestCount" aria-label="Jumlah Orang">
+                        {% for guest_count in range(1, 10) %}
+                            <option value="{{ guest_count }}">{{ guest_count }}</option>
+                        {% endfor %}
+                    </select>
+                </dd>
             </div>
         </dl>
         <p class="hint is-hidden" id="staffVerificationCountdown"></p>
@@ -599,10 +607,10 @@ if (addGuestModal && openAddGuestModal && cancelAddGuestModal && addGuestForm) {
 const staffVerificationModal = document.getElementById("staffVerificationModal");
 if (staffVerificationModal) {
     const staffVerificationMessage = document.getElementById("staffVerificationMessage");
-    const staffVerificationGuestName = document.getElementById("staffVerificationGuestName");
     const staffVerificationGuestPhone = document.getElementById("staffVerificationGuestPhone");
     const staffVerificationGuestEmail = document.getElementById("staffVerificationGuestEmail");
     const staffVerificationGuestStatus = document.getElementById("staffVerificationGuestStatus");
+    const staffVerificationGuestCount = document.getElementById("staffVerificationGuestCount");
     const staffVerificationCountdown = document.getElementById("staffVerificationCountdown");
     const confirmStaffVerification = document.getElementById("confirmStaffVerification");
     const rejectStaffVerification = document.getElementById("rejectStaffVerification");
@@ -688,10 +696,16 @@ if (staffVerificationModal) {
         const isPending = notification.status === "pending";
 
         staffVerificationMessage.textContent = notification.message || "Request verifikasi kehadiran.";
-        staffVerificationGuestName.textContent = guest.nama || "N/A";
         staffVerificationGuestPhone.textContent = guest.no_hp || notification.no_hp || "N/A";
         staffVerificationGuestEmail.textContent = guest.email || "N/A";
         staffVerificationGuestStatus.textContent = guest.status || "N/A";
+        if (staffVerificationGuestCount) {
+            const guestCount = Number(guest.jumlah_orang || 1);
+            if (isNewNotification || !isPending) {
+                staffVerificationGuestCount.value = String(guestCount >= 1 && guestCount <= 9 ? guestCount : 1);
+            }
+            staffVerificationGuestCount.disabled = !isPending;
+        }
 
         confirmStaffVerification.classList.toggle("is-hidden", !isPending);
         rejectStaffVerification.classList.toggle("is-hidden", !isPending);
@@ -733,9 +747,12 @@ if (staffVerificationModal) {
         isStaffVerificationActionBusy = true;
         setStaffVerificationButtonsDisabled(true);
         try {
+            const formData = new FormData();
+            formData.set("jumlah_orang", staffVerificationGuestCount ? staffVerificationGuestCount.value : "1");
             await fetch(buildStaffActionUrl(staffVerificationModal.dataset.confirmUrlTemplate, currentStaffVerification.id), {
                 method: "POST",
                 headers: { "Accept": "application/json" },
+                body: formData,
             });
             closeStaffVerificationModal();
             window.location.reload();

@@ -530,6 +530,11 @@ def is_owner_in_active_billing_period(owner_user):
     return attendance_service.is_owner_in_active_billing_period(owner_user)
 
 
+# Fungsi untuk mengambil nama event publik verifikasi kehadiran.
+def get_attendance_event_name(owner_user):
+    return attendance_service.get_attendance_event_name(owner_user)
+
+
 # Fungsi untuk membuat pesan akses periode payment tidak aktif.
 def build_inactive_billing_period_message():
     return attendance_service.build_inactive_billing_period_message()
@@ -637,9 +642,9 @@ def get_staff_attendance_notification(staff):
 
 
 # Fungsi untuk mengonfirmasi request verifikasi kehadiran oleh staff.
-def confirm_attendance_verification_request(staff, request_id):
+def confirm_attendance_verification_request(staff, request_id, jumlah_orang=1):
     sync_logging_service_config()
-    return attendance_service.confirm_attendance_verification_request(staff, request_id)
+    return attendance_service.confirm_attendance_verification_request(staff, request_id, jumlah_orang)
 
 
 # Fungsi untuk menolak/menutup request verifikasi kehadiran oleh staff.
@@ -1281,6 +1286,7 @@ def build_blueprint_dependencies():
         get_accessible_guest=get_accessible_guest,
         get_accessible_staff_guest=get_accessible_staff_guest,
         get_active_staff_access=get_active_staff_access,
+        get_attendance_event_name=get_attendance_event_name,
         get_attendance_owner_from_token=get_attendance_owner_from_token,
         get_attendance_staff_from_token=get_attendance_staff_from_token,
         get_guest_attendance_verification_status=get_guest_attendance_verification_status,

@@ -120,6 +120,7 @@ class UserRouteTest(unittest.TestCase):
             status="VIP",
             added_by="client_added",
             kehadiran=None,
+            jumlah_orang=2,
             verified_by_staff_name=None,
         )
         with app_module.app.test_request_context("/user/data"):
@@ -145,10 +146,16 @@ class UserRouteTest(unittest.TestCase):
                 per_page=10,
                 guest_status_options=("Reguler", "VIP"),
                 default_guest_status="Reguler",
+                staff=SimpleNamespace(id=1),
             )
 
         self.assertIn("<th>Ditambahkan</th>", html)
+        self.assertIn("<th>Jumlah Orang</th>", html)
         self.assertIn("<td>client_added</td>", html)
+        self.assertIn("<td>N/A</td>", html)
+        self.assertIn('id="staffVerificationGuestCount"', html)
+        self.assertIn("if (isNewNotification || !isPending)", html)
+        self.assertNotIn('id="staffVerificationGuestName"', html)
         self.assertIn('name="nama"', html)
         self.assertIn('name="no_hp"', html)
         self.assertIn('name="email"', html)

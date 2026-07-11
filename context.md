@@ -113,6 +113,7 @@ Kolom:
 - `status`
 - `added_by`
 - `kehadiran`
+- `jumlah_orang`
 - `verified_by_staff_id`
 - `verified_by_staff_name`
 - `user_id`
@@ -335,6 +336,12 @@ Cleaning dijalankan setelah klik upload file dan sebelum data disimpan.
 - Format tampilan timestamp: `dd-MMM HH:mm`, contoh `05-Jun 18:00`.
 - Jika belum ada nilai, tampil sebagai `N/A`.
 
+### jumlah_orang
+
+- Diisi dari dropdown `Jumlah Orang` pada popup konfirmasi staff saat staff menekan `Konfirmasi`.
+- Nilai valid 1 sampai 9, default 1.
+- Ditampilkan pada Data Tamu setelah kolom `Kehadiran`; jika `kehadiran` belum terisi, nilai tampil `N/A`.
+
 ## Verifikasi Kehadiran Tamu
 
 Route utama:
@@ -351,11 +358,14 @@ Perilaku:
 - Saat URL staff digenerate ulang, nonce lama diganti sehingga URL publik/QR staff lama otomatis tidak valid.
 - Kartu `Verifikasi Kehadiran` di dashboard client tetap dipertahankan tanpa tombol; kontrol `Buka`, `Generate`, dan `QR Client` dipindahkan ke halaman Staff client.
 - Tombol `QR Client` pada halaman Staff client mengunduh QR PNG resolusi sekitar 2400 px yang berisi URL halaman verifikasi `/kehadiran/<attendance_token>`. Jika discan device tamu, halaman verifikasi langsung terbuka di device tamu.
+- Halaman publik `/kehadiran/<attendance_token>` menampilkan nama event dari `BillingPayment.event_name` verified terbaru, bukan nama client.
 - Halaman publik menampilkan UI input nomor HP dengan prefix visual `+62`.
 - Kolom input setelah prefix menerima angka minimal 8 digit yang diawali `08` atau `8`; frontend mengirim hidden value canonical `62...`.
 - Jika nomor ditemukan dan `kehadiran` masih kosong, backend membuat `AttendanceVerificationRequest` status `pending`; halaman tamu berubah menjadi status tunggu `Harap Tunggu Sebentar, Data Sedang Diverifikasi` dengan spinner dan polling status tiap 3 detik.
 - Popup verifikasi kehadiran hanya muncul di sisi staff pemilik QR jika request memiliki `target_staff_id`. Staff lain hanya menerima request dari QR/link miliknya masing-masing.
-- Staff dapat klik `Konfirmasi` untuk mengisi `Guests.kehadiran` dan `verified_by_staff_name`, atau klik `Tolak/Tutup` untuk menutup request bagi staff tersebut.
+- Popup staff menampilkan info tamu tanpa kolom `Nama`; nama tamu sudah ada pada pesan popup.
+- Popup staff memiliki dropdown `Jumlah Orang` di posisi detail terakhir dengan pilihan 1 sampai 9 dan default 1.
+- Staff dapat klik `Konfirmasi` untuk mengisi `Guests.kehadiran`, `Guests.jumlah_orang`, dan `verified_by_staff_name`, atau klik `Tolak/Tutup` untuk menutup request bagi staff tersebut.
 - Jika staff klik `Konfirmasi`, halaman tamu otomatis redirect ke halaman hasil dan menampilkan `Selamat Datang Bpk/Ibu (nama tamu)`.
 - Jika request habis karena timeout 1 menit tanpa konfirmasi, halaman tamu menampilkan `Waktu Habis, Nomor Tidak Berhasil Diverifikasi`.
 - Jika staff target klik `Tolak/Tutup`, halaman tamu menampilkan `Nomor Tidak Berhasil Diverifikasi, Harap Hubungi Staff`. Untuk request global tanpa `target_staff_id`, pesan ini muncul jika semua staff aktif menutup request.
@@ -514,6 +524,7 @@ Kolom tabel:
 - `Status`
 - `Ditambahkan`
 - `Kehadiran`
+- `Jumlah Orang`
 - `Verifikasi`
 - `QR Code`
 - `WhatsApp`
@@ -673,6 +684,7 @@ Kolom tabel admin:
 - `Email`
 - `Status`
 - `Kehadiran`
+- `Jumlah Orang`
 - `QR Code`
 - `Action`
 
@@ -698,7 +710,7 @@ Download mengikuti filter yang sedang dipakai:
 File Excel berisi kolom:
 
 ```text
-no | nama | no_hp | email | status | kehadiran
+no | nama | no_hp | email | status | kehadiran | jumlah_orang | verifikasi
 ```
 
 Nama file:
@@ -719,6 +731,7 @@ Nilai kosong:
 - `email`: `N/A`
 - `no_hp`: `N/A`
 - `kehadiran`: `N/A`; jika ada nilai memakai format `dd-MMM HH:mm`
+- `jumlah_orang`: `N/A` jika `kehadiran` belum terisi; jika sudah terverifikasi memakai nilai staff, default 1.
 - `status`: default `Reguler`
 
 ## Ekspor Data Client
@@ -733,7 +746,7 @@ Download mengikuti filter yang sedang dipakai:
 File Excel berisi kolom:
 
 ```text
-no | nama | no_hp | email | status | kehadiran | verifikasi
+no | nama | no_hp | email | status | kehadiran | jumlah_orang | verifikasi
 ```
 
 Nama file:
@@ -1207,6 +1220,11 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Verifikasi Staff client 2026-07-11: `.venv\Scripts\python.exe -m py_compile app.py constants.py services\guest_service.py services\staff_service.py services\listing_service.py blueprints\registry.py blueprints\client_staff\routes.py blueprints\staff\routes.py blueprints\admin\routes.py tests\test_client_staff.py tests\test_staff.py tests\test_admin_routes.py`, targeted unittest `tests.test_client_staff tests.test_staff tests.test_admin_routes tests.test_listing_service`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 117 test.
 - Update tombol edit Staff 2026-07-11: saat mode edit staff aktif, kolom Action hanya menampilkan `Simpan` dan `Batal` merah; `Batal` membatalkan edit dan mengembalikan tombol action sesuai status aktif/blokir staff.
 - Verifikasi tombol edit Staff 2026-07-11: `.venv\Scripts\python.exe -m py_compile tests\test_client_staff.py`, `.venv\Scripts\python.exe -m unittest tests.test_client_staff`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 117 test.
+- Update verifikasi kehadiran staff 2026-07-11: popup staff menghapus detail `Nama`, menambahkan dropdown `Jumlah Orang` 1-9, menyimpan pilihan ke `Guests.jumlah_orang`, Data Tamu client/admin/superadmin/staff menampilkan kolom `Jumlah Orang` setelah `Kehadiran`, dan halaman verifikasi tamu menampilkan `BillingPayment.event_name` bukan nama client.
+- Verifikasi jumlah orang attendance 2026-07-11: `.venv\Scripts\python.exe -m py_compile app.py models.py services\schema_service.py services\attendance_service.py services\event_archive_service.py blueprints\registry.py blueprints\staff\routes.py blueprints\attendance\routes.py blueprints\user\routes.py blueprints\admin\routes.py tests\test_attendance.py tests\test_event_archive_service.py tests\test_user_routes.py`, targeted unittest `tests.test_attendance tests.test_user_routes tests.test_event_archive_service`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 118 test.
+- Update tampilan Jumlah Orang 2026-07-11: kolom `Jumlah Orang` pada Data Tamu dan export menampilkan `N/A` jika `Guests.kehadiran` belum terisi; nilai angka hanya tampil setelah tamu terverifikasi hadir.
+- Verifikasi tampilan Jumlah Orang 2026-07-11: `.venv\Scripts\python.exe -m py_compile blueprints\user\routes.py blueprints\admin\routes.py services\event_archive_service.py tests\test_user_routes.py tests\test_event_archive_service.py`, targeted unittest `tests.test_user_routes tests.test_event_archive_service`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 118 test.
+- Fix dropdown Jumlah Orang 2026-07-11: polling popup staff tidak lagi mereset pilihan dropdown ke nilai server selama request yang sama masih pending; dropdown hanya diisi ulang saat request baru atau status sudah bukan pending.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.

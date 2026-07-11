@@ -217,6 +217,13 @@ def get_latest_billing_period(owner_user):
     return latest_payment
 
 
+# Fungsi untuk mengambil nama event publik verifikasi kehadiran.
+def get_attendance_event_name(owner_user):
+    latest_payment = get_latest_verified_billing_payment(owner_user)
+    event_name = str(getattr(latest_payment, "event_name", "") or "").strip() if latest_payment else ""
+    return event_name if event_name and event_name.upper() != "N/A" else "Event"
+
+
 # Fungsi untuk mengecek akses client masih dalam periode payment.
 def is_owner_in_active_billing_period(owner_user):
     latest_payment = get_latest_billing_period(owner_user)
@@ -554,6 +561,14 @@ def build_pending_retry_response():
     }
 
 
+# Fungsi untuk menormalisasi jumlah orang dari popup staff.
+def normalize_attendance_guest_count(value):
+    guest_count = parse_int(value, default=1)
+    if guest_count < 1 or guest_count > 9:
+        return 1
+    return guest_count
+
+
 # Fungsi untuk membuat pesan selamat datang halaman verifikasi nomor HP tamu.
 def build_phone_attendance_welcome_message(guest):
     guest_name = getattr(guest, "nama", "") or "Tamu"
@@ -704,6 +719,11 @@ def build_staff_notification_payload(verification_request):
             "no_hp": guest.no_hp if guest else verification_request.no_hp or "",
             "email": guest.email if guest else "",
             "status": guest.status if guest else "",
+            "jumlah_orang": (
+                normalize_attendance_guest_count(getattr(guest, "jumlah_orang", 1))
+                if guest
+                else 1
+            ),
         },
     }
 
@@ -784,7 +804,7 @@ def reject_attendance_verification_request(staff, request_id):
 
 
 # Fungsi untuk mengonfirmasi request verifikasi dan mengisi kehadiran.
-def confirm_attendance_verification_request(staff, request_id):
+def confirm_attendance_verification_request(staff, request_id, jumlah_orang=1):
     verification_request = db.session.get(AttendanceVerificationRequest, request_id)
     if not staff or not verification_request or verification_request.owner_user_id != staff.owner_user_id:
         return {"status": "not_found", "message": "Request verifikasi tidak ditemukan."}
@@ -818,7 +838,9 @@ def confirm_attendance_verification_request(staff, request_id):
         return {"status": "already_verified", "message": verification_request.message}
 
     staff_name = staff.nama or staff.no_hp
+    guest_count = normalize_attendance_guest_count(jumlah_orang)
     guest.kehadiran = get_current_naive_datetime()
+    guest.jumlah_orang = guest_count
     guest.verified_by_staff_id = staff.id
     guest.verified_by_staff_name = staff_name
     verification_request.status = ATTENDANCE_REQUEST_CONFIRMED
@@ -838,12 +860,14 @@ def confirm_attendance_verification_request(staff, request_id):
             "staff_id": staff.id,
             "staff_name": staff_name,
             "source": verification_request.source,
+            "jumlah_orang": guest_count,
         },
     )
     return {
         "status": "confirmed",
         "guest_name": guest.nama,
         "attendance_time": attendance_time,
+        "jumlah_orang": guest_count,
         "verified_by": staff_name,
         "message": f"Kehadiran {guest.nama} berhasil diverifikasi.",
     }

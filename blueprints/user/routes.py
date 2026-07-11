@@ -256,6 +256,7 @@ def create_user_blueprint(deps):
                     "email": guest.email or "N/A",
                     "status": guest.status or deps.DEFAULT_GUEST_STATUS,
                     "kehadiran": deps.format_attendance_time(guest.kehadiran) or "N/A",
+                    "jumlah_orang": (guest.jumlah_orang or 1) if guest.kehadiran else "N/A",
                     "verifikasi": guest.verified_by_staff_name or "N/A",
                 }
             )
@@ -271,7 +272,16 @@ def create_user_blueprint(deps):
         )
 
         output = BytesIO()
-        columns = ["no", "nama", "no_hp", "email", "status", "kehadiran", "verifikasi"]
+        columns = [
+            "no",
+            "nama",
+            "no_hp",
+            "email",
+            "status",
+            "kehadiran",
+            "jumlah_orang",
+            "verifikasi",
+        ]
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             pd.DataFrame(rows, columns=columns).to_excel(writer, index=False, sheet_name="Data Tamu")
         output.seek(0)

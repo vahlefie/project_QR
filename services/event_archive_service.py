@@ -13,7 +13,16 @@ from flask import current_app
 from models import BillingPayment, EventArchive, Guests, User
 from services import attendance_service
 
-ARCHIVE_COLUMNS = ("no", "nama", "no_hp", "email", "status", "kehadiran", "verifikasi")
+ARCHIVE_COLUMNS = (
+    "no",
+    "nama",
+    "no_hp",
+    "email",
+    "status",
+    "kehadiran",
+    "jumlah_orang",
+    "verifikasi",
+)
 
 
 # Fungsi untuk mengambil tanggal hari ini sesuai timezone aplikasi.
@@ -140,6 +149,7 @@ def build_guest_archive_rows(guests):
                 "email": guest.email or "N/A",
                 "status": guest.status or DEFAULT_GUEST_STATUS,
                 "kehadiran": attendance_service.format_attendance_time(guest.kehadiran) or "N/A",
+                "jumlah_orang": (guest.jumlah_orang or 1) if guest.kehadiran else "N/A",
                 "verifikasi": guest.verified_by_staff_name or "N/A",
             }
         )

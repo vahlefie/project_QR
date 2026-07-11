@@ -249,7 +249,12 @@ def create_staff_blueprint(deps):
     # Route konfirmasi kehadiran oleh staff.
     def confirm_staff_attendance_notification(request_id):
         staff = deps.get_current_staff()
-        result = deps.confirm_attendance_verification_request(staff, request_id)
+        payload = request.get_json(silent=True) or request.form
+        result = deps.confirm_attendance_verification_request(
+            staff,
+            request_id,
+            payload.get("jumlah_orang", 1),
+        )
         status_code = 200 if result.get("status") in {"confirmed", "already_verified"} else 400
         if result.get("status") == "not_found":
             status_code = 404

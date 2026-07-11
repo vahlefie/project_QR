@@ -95,6 +95,21 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("Link verifikasi tidak valid.", response.get_data(as_text=True))
 
+    # Fungsi untuk memastikan landing verifikasi menampilkan nama event, bukan nama client.
+    def test_attendance_landing_shows_event_name_not_client_name(self):
+        owner_id, _, attendance_token, _ = self.create_active_attendance_owner("attendance_event_client", 628120040006)
+
+        with app_module.app.app_context():
+            owner = app_module.db.session.get(User, owner_id)
+            owner_name = owner.nama
+
+        response = self.client.get(f"/kehadiran/{attendance_token}")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Event attendance_event_client", html)
+        self.assertNotIn(owner_name, html)
+
     # Fungsi untuk memastikan route attendance sudah terdaftar melalui Blueprint.
     def test_attendance_routes_use_blueprint_endpoints(self):
         endpoints = {rule.endpoint for rule in app_module.app.url_map.iter_rules()}
@@ -151,7 +166,10 @@ class AttendanceRouteTest(unittest.TestCase):
 
     # Fungsi untuk memastikan halaman tamu menunggu staff lalu memuat hasil sukses.
     def test_attendance_guest_waits_for_staff_confirmation_result_page(self):
-        _, _, attendance_token, staff_id = self.create_active_attendance_owner("attendance_wait_client", 628120040001)
+        _, guest_id, attendance_token, staff_id = self.create_active_attendance_owner(
+            "attendance_wait_client",
+            628120040001,
+        )
 
         response = self.client.post(
             f"/kehadiran/{attendance_token}/verify",
@@ -175,9 +193,14 @@ class AttendanceRouteTest(unittest.TestCase):
             confirm_result = app_module.confirm_attendance_verification_request(
                 staff,
                 response.json["verification_request_id"],
+                4,
             )
+            guest = app_module.db.session.get(Guests, guest_id)
+            guest_count = guest.jumlah_orang
 
         self.assertEqual(confirm_result["status"], "confirmed")
+        self.assertEqual(confirm_result["jumlah_orang"], 4)
+        self.assertEqual(guest_count, 4)
 
         confirmed_status = self.client.get(response.json["status_url"])
         self.assertEqual(confirmed_status.status_code, 200)
@@ -221,6 +244,7 @@ class AttendanceRouteTest(unittest.TestCase):
         self.assertIsNotNone(target_notification)
         self.assertEqual(target_notification["id"], response.json["verification_request_id"])
         self.assertEqual(target_notification["target_staff_id"], staff_id)
+        self.assertEqual(target_notification["guest"]["jumlah_orang"], 1)
         self.assertIsNone(other_notification)
 
     # Fungsi untuk memastikan request yang expired tampil sebagai waktu habis pada halaman tamu.
