@@ -11,7 +11,14 @@
 
     <div class="subtle-panel">
         <h4>Upload File Excel Tamu</h4>
-        <form action="/admin/upload-guests" method="POST" enctype="multipart/form-data" class="toolbar">
+        <form
+            id="guestUploadForm"
+            action="/admin/upload-guests"
+            method="POST"
+            enctype="multipart/form-data"
+            class="toolbar"
+            data-upload-confirm="true"
+        >
             <select name="owner_user_id" required>
                 <option value="">Pilih client pemilik data</option>
                 {% for account in users %}
@@ -87,6 +94,8 @@
                             <th>No HP</th>
                             <th>Email</th>
                             <th>Status</th>
+                            <th>Ditambahkan</th>
+                            <th>Diedit</th>
                             <th>Kehadiran</th>
                             <th>Verifikasi</th>
                             <th>QR Code</th>
@@ -96,34 +105,39 @@
                     </thead>
                     <tbody>
                         {% for guest in guests %}
+                        {% set can_edit_guest = not guest.kehadiran %}
                         <tr id="guest-row-{{ guest.id }}">
                             <td>{{ (pagination.page - 1) * per_page + loop.index }}</td>
                             <td>{{ guest.owner.username if guest.owner else 'Legacy / Tanpa Owner' }}</td>
                             <td>{{ guest.nama }}</td>
                             <td>{{ guest.no_hp or 'N/A' }}</td>
                             <td>{{ guest.email or 'N/A' }}</td>
-                            <td class="editable-cell">
-                                <span class="read-value">{{ guest.status or default_guest_status }}</span>
-                                <form
-                                    id="guest-status-form-admin-{{ guest.id }}"
-                                    class="guest-status-form edit-control"
-                                    action="{{ url_for('guests.update_guest_status', guest_id=guest.id) }}"
-                                    method="POST"
-                                >
-                                    <input type="hidden" name="search" value="{{ search }}">
-                                    <input type="hidden" name="page" value="{{ pagination.page }}">
-                                    <input type="hidden" name="per_page" value="{{ per_page }}">
-                                    <input type="hidden" name="sort_by" value="{{ sort_by }}">
-                                    <input type="hidden" name="owner_user_id" value="{{ selected_owner_user_id }}">
-                                    <select name="status" required>
-                                        {% for status_option in guest_status_options %}
-                                            <option value="{{ status_option }}" {% if (guest.status or default_guest_status) == status_option %}selected{% endif %}>
-                                                {{ status_option }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </form>
+                            <td class="{% if can_edit_guest %}editable-cell{% endif %}">
+                                <span class="{% if can_edit_guest %}read-value{% endif %}">{{ guest.status or default_guest_status }}</span>
+                                {% if can_edit_guest %}
+                                    <form
+                                        id="guest-status-form-admin-{{ guest.id }}"
+                                        class="guest-status-form edit-control"
+                                        action="{{ url_for('guests.update_guest_status', guest_id=guest.id) }}"
+                                        method="POST"
+                                    >
+                                        <input type="hidden" name="search" value="{{ search }}">
+                                        <input type="hidden" name="page" value="{{ pagination.page }}">
+                                        <input type="hidden" name="per_page" value="{{ per_page }}">
+                                        <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                                        <input type="hidden" name="owner_user_id" value="{{ selected_owner_user_id }}">
+                                        <select name="status" required>
+                                            {% for status_option in guest_status_options %}
+                                                <option value="{{ status_option }}" {% if (guest.status or default_guest_status) == status_option %}selected{% endif %}>
+                                                    {{ status_option }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </form>
+                                {% endif %}
                             </td>
+                            <td>{{ guest.added_by or 'N/A' }}</td>
+                            <td>{{ guest.edited_by or 'N/A' }}</td>
                             <td>{{ guest.kehadiran|attendance_time }}</td>
                             <td>{{ guest.verified_by_staff_name or 'N/A' }}</td>
                             <td>
@@ -152,14 +166,16 @@
                             </td>
                             <td>
                                 <div class="action-group">
-                                    <button
-                                        type="button"
-                                        class="secondary-button table-action-button guest-edit-toggle"
-                                        data-row-id="guest-row-{{ guest.id }}"
-                                        data-form-id="guest-status-form-admin-{{ guest.id }}"
-                                    >
-                                        Edit
-                                    </button>
+                                    {% if can_edit_guest %}
+                                        <button
+                                            type="button"
+                                            class="secondary-button table-action-button guest-edit-toggle"
+                                            data-row-id="guest-row-{{ guest.id }}"
+                                            data-form-id="guest-status-form-admin-{{ guest.id }}"
+                                        >
+                                            Edit
+                                        </button>
+                                    {% endif %}
                                     <form
                                         action="{{ url_for('guests.delete_guest_row', guest_id=guest.id) }}"
                                         method="POST"
@@ -188,6 +204,23 @@
 
             {% include "_pagination.html" %}
     {% endif %}
+</div>
+
+<div
+    id="uploadSubmitConfirmModal"
+    class="confirm-modal is-hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="uploadSubmitConfirmTitle"
+>
+    <div class="confirm-dialog">
+        <h4 id="uploadSubmitConfirmTitle">Apakah akan upload data?</h4>
+        <div class="confirm-actions">
+            <button type="button" id="confirmUploadSubmit">Ya</button>
+            <button type="button" class="danger-button" id="cancelUploadSubmit">Batal</button>
+        </div>
+    </div>
 </div>
 
 {% if upload_warning %}
@@ -315,6 +348,42 @@
 {% endif %}
 
 <script>
+const uploadConfirmForm = document.querySelector("[data-upload-confirm='true']");
+const uploadSubmitConfirmModal = document.getElementById("uploadSubmitConfirmModal");
+const confirmUploadSubmit = document.getElementById("confirmUploadSubmit");
+const cancelUploadSubmit = document.getElementById("cancelUploadSubmit");
+
+if (uploadConfirmForm && uploadSubmitConfirmModal && confirmUploadSubmit && cancelUploadSubmit) {
+    const closeUploadConfirm = () => {
+        uploadSubmitConfirmModal.classList.add("is-hidden");
+        uploadSubmitConfirmModal.setAttribute("aria-hidden", "true");
+    };
+
+    uploadConfirmForm.addEventListener("submit", (event) => {
+        if (uploadConfirmForm.dataset.confirmed === "true") {
+            return;
+        }
+
+        event.preventDefault();
+        uploadSubmitConfirmModal.classList.remove("is-hidden");
+        uploadSubmitConfirmModal.setAttribute("aria-hidden", "false");
+        confirmUploadSubmit.focus();
+    });
+
+    confirmUploadSubmit.addEventListener("click", () => {
+        uploadConfirmForm.dataset.confirmed = "true";
+        closeUploadConfirm();
+        uploadConfirmForm.requestSubmit();
+    });
+
+    cancelUploadSubmit.addEventListener("click", closeUploadConfirm);
+    uploadSubmitConfirmModal.addEventListener("click", (event) => {
+        if (event.target === uploadSubmitConfirmModal) {
+            closeUploadConfirm();
+        }
+    });
+}
+
 const setGuestRowEditing = (row, editButton, form, isEditing, resetForm = false) => {
     const deleteButton = row.querySelector(".guest-delete-toggle");
 

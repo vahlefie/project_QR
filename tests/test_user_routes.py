@@ -1,7 +1,7 @@
 import tempfile
-import time
 import unittest
-from datetime import date
+import time
+from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -119,6 +119,7 @@ class UserRouteTest(unittest.TestCase):
             email=None,
             status="VIP",
             added_by="client_added",
+            edited_by="Client Editor",
             kehadiran=None,
             jumlah_orang=2,
             verified_by_staff_name=None,
@@ -150,8 +151,10 @@ class UserRouteTest(unittest.TestCase):
             )
 
         self.assertIn("<th>Ditambahkan</th>", html)
+        self.assertIn("<th>Diedit</th>", html)
         self.assertIn("<th>Jumlah Orang</th>", html)
         self.assertIn("<td>client_added</td>", html)
+        self.assertIn("<td>Client Editor</td>", html)
         self.assertIn("<td>N/A</td>", html)
         self.assertIn('id="staffVerificationGuestCount"', html)
         self.assertIn("if (isNewNotification || !isPending)", html)
@@ -173,6 +176,57 @@ class UserRouteTest(unittest.TestCase):
         self.assertIn("function isActionMenuPinned(group)", action_toggle_script)
         self.assertIn('document.addEventListener("guest-row-editing-change"', action_toggle_script)
         self.assertIn("isActionMenuPinned(openGroup)", action_toggle_script)
+
+    # Fungsi untuk memastikan upload user meminta konfirmasi dan tamu hadir tidak bisa diedit dari UI.
+    def test_user_data_template_confirms_upload_and_locks_verified_guest_edit(self):
+        verified_guest = SimpleNamespace(
+            id=988,
+            nama="Tamu Hadir",
+            no_hp="628123450001",
+            email="hadir@example.com",
+            status="VIP",
+            added_by="client_added",
+            edited_by=None,
+            kehadiran=datetime(2026, 7, 12, 10, 0, 0),
+            jumlah_orang=2,
+            verified_by_staff_name="Staff Verifier",
+        )
+        with app_module.app.test_request_context("/user/data"):
+            html = render_template(
+                "user_data.html",
+                layout_template="user_layout.html",
+                allow_guest_upload=True,
+                allow_guest_export=False,
+                allow_guest_mutations=True,
+                allow_guest_full_edit=True,
+                show_guest_qr_column=False,
+                data_endpoint="user.user_data",
+                add_guest_endpoint="user.add_user_guest",
+                status_endpoint="guests.update_guest_status",
+                delete_endpoint="guests.delete_guest_row",
+                user="Client Test",
+                message="",
+                guests=[verified_guest],
+                total_guests=1,
+                pagination=SimpleNamespace(page=1, pages=1, has_prev=False, has_next=False),
+                search="",
+                sort_by="latest",
+                per_page=10,
+                guest_status_options=("Reguler", "VIP"),
+                default_guest_status="Reguler",
+                staff=None,
+            )
+
+        self.assertIn("Apakah akan upload data?", html)
+        self.assertIn('data-upload-confirm="true"', html)
+        self.assertIn('id="confirmUploadSubmit">Ya</button>', html)
+        self.assertIn('class="danger-button" id="cancelUploadSubmit">Batal</button>', html)
+        self.assertIn("uploadConfirmForm.addEventListener", html)
+        self.assertNotIn('id="guest-status-form-user-988"', html)
+        self.assertNotIn('data-form-id="guest-status-form-user-988"', html)
+        self.assertNotIn('form="guest-status-form-user-988"', html)
+        self.assertNotIn('class="secondary-button table-action-button guest-edit-toggle"', html)
+        self.assertIn("Staff Verifier", html)
 
 
 if __name__ == "__main__":

@@ -112,6 +112,7 @@ Kolom:
 - `email`
 - `status`
 - `added_by`
+- `edited_by`
 - `kehadiran`
 - `jumlah_orang`
 - `verified_by_staff_id`
@@ -124,6 +125,7 @@ Relasi:
 - Role `admin` dan `super_admin` boleh mengakses data tamu semua user.
 - Staff hanya boleh mengakses data tamu milik client pemilik staff.
 - `added_by` menyimpan label sumber penambah tamu. Upload client/admin untuk client memakai `username` client, tambah manual client memakai nama client, dan tambah manual staff memakai nama staff.
+- `edited_by` menyimpan label pengedit terakhir. Nilai default tampilan adalah `N/A` jika belum pernah diedit. Edit oleh client memakai nama client, edit oleh staff memakai nama staff, sedangkan edit oleh admin/super admin memakai `username` client pemilik data tamu.
 
 ### GuestShortUrl
 
@@ -498,6 +500,7 @@ Pilihan:
 
 Duplicate dicocokkan terhadap data tersimpan dan baris lain di file upload berdasarkan nilai yang sama pada `no_hp` atau `email`. `nama` tetap wajib dan dibersihkan, tetapi tidak dipakai sebagai kunci unique saat upload.
 Setiap tamu yang masuk lewat upload client/admin untuk client mengisi kolom `Ditambahkan` dengan `username` client pemilik data.
+Saat upload duplicate dipilih `Ya`, baris tersimpan diperbarui tanpa duplikasi dan kolom `Diedit` diisi sesuai aktor edit: nama client untuk upload client, atau `username` client pemilik data untuk upload admin/super admin.
 
 ## Data Tamu Role User
 
@@ -523,6 +526,7 @@ Kolom tabel:
 - `Email`
 - `Status`
 - `Ditambahkan`
+- `Diedit`
 - `Kehadiran`
 - `Jumlah Orang`
 - `Verifikasi`
@@ -683,6 +687,8 @@ Kolom tabel admin:
 - `No HP`
 - `Email`
 - `Status`
+- `Ditambahkan`
+- `Diedit`
 - `Kehadiran`
 - `Jumlah Orang`
 - `QR Code`
@@ -1225,6 +1231,8 @@ Testing yang pernah dijalankan setelah update terbaru:
 - Update tampilan Jumlah Orang 2026-07-11: kolom `Jumlah Orang` pada Data Tamu dan export menampilkan `N/A` jika `Guests.kehadiran` belum terisi; nilai angka hanya tampil setelah tamu terverifikasi hadir.
 - Verifikasi tampilan Jumlah Orang 2026-07-11: `.venv\Scripts\python.exe -m py_compile blueprints\user\routes.py blueprints\admin\routes.py services\event_archive_service.py tests\test_user_routes.py tests\test_event_archive_service.py`, targeted unittest `tests.test_user_routes tests.test_event_archive_service`, dan `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 118 test.
 - Fix dropdown Jumlah Orang 2026-07-11: polling popup staff tidak lagi mereset pilihan dropdown ke nilai server selama request yang sama masih pending; dropdown hanya diisi ulang saat request baru atau status sudah bukan pending.
+- Update Diedit Data Tamu 2026-07-12: model `Guests` menambah kolom `edited_by`; tabel Data Tamu user/staff dan admin/super admin menampilkan kolom `Diedit` setelah `Ditambahkan`. Edit client mengisi `Diedit` dengan nama client, edit staff mengisi nama staff, sedangkan edit admin/super admin dan upload replace admin mengisi `Diedit` dengan `username` client pemilik data. Baris baru dari upload admin/super admin tetap mengisi `Ditambahkan` dengan `username` client pemilik data.
+- Verifikasi Diedit Data Tamu 2026-07-12: `.venv\Scripts\python.exe -m py_compile app.py models.py services\guest_service.py services\schema_service.py blueprints\registry.py blueprints\guests\routes.py blueprints\staff\routes.py blueprints\user\routes.py blueprints\admin\routes.py tests\test_guest_service.py tests\test_guest_routes.py tests\test_user_routes.py tests\test_staff.py tests\test_admin_routes.py`, targeted unittest `tests.test_guest_service tests.test_guest_routes tests.test_user_routes tests.test_staff tests.test_admin_routes` berhasil menjalankan 40 test, `.venv\Scripts\python.exe -m unittest discover` berhasil menjalankan 120 test, dan smoke test browser/server `http://127.0.0.1:5000/login` mengembalikan 200 OK.
 
 Catatan browser:
 - Jika tampilan browser belum berubah setelah edit, kemungkinan masih ada proses Flask lama yang berjalan di port yang sama atau cache browser belum refresh.

@@ -1,6 +1,6 @@
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -267,6 +267,7 @@ class AdminRouteTest(unittest.TestCase):
                 self.assertEqual(guests[0].nama, "Nama Baru")
                 self.assertEqual(guests[0].email, "baru@example.com")
                 self.assertEqual(guests[0].status, "VIP")
+                self.assertEqual(guests[0].edited_by, "admin_duplicate_client")
         finally:
             app_module.app.instance_path = original_instance_path
             with app_module.app.app_context():
@@ -295,6 +296,56 @@ class AdminRouteTest(unittest.TestCase):
                 self.assertIn('id="phoneLocalInput"', html)
                 self.assertIn('id="phoneFullInput" type="hidden" name="no_hp"', html)
                 self.assertIn("phoneFullInput.value = `62${localNumber}`;", html)
+
+    # Fungsi untuk memastikan upload admin meminta konfirmasi dan tamu hadir tidak bisa diedit dari UI.
+    def test_admin_guests_template_confirms_upload_and_locks_verified_guest_edit(self):
+        verified_guest = type(
+            "Guest",
+            (),
+            {
+                "id": 889,
+                "owner": None,
+                "user_id": None,
+                "nama": "Tamu Hadir Admin",
+                "no_hp": "6281200889001",
+                "email": "hadir-admin@example.com",
+                "status": "VIP",
+                "added_by": "client_owner",
+                "edited_by": None,
+                "kehadiran": datetime(2026, 7, 12, 10, 30, 0),
+                "verified_by_staff_name": "Staff Admin",
+            },
+        )()
+        with app_module.app.test_request_context("/admin/guests"):
+            html = render_template(
+                "admin_guests.html",
+                user="Admin",
+                users=[],
+                selected_owner_user_id="",
+                message="",
+                upload_error="",
+                upload_warning="",
+                pending_upload=None,
+                upload_result=None,
+                guests=[verified_guest],
+                total_guests=1,
+                pagination=type("Pagination", (), {"page": 1, "pages": 1, "has_prev": False, "has_next": False})(),
+                search="",
+                sort_by="latest",
+                per_page=10,
+                guest_status_options=("Reguler", "VIP"),
+                default_guest_status="Reguler",
+            )
+
+        self.assertIn("Apakah akan upload data?", html)
+        self.assertIn('data-upload-confirm="true"', html)
+        self.assertIn('id="confirmUploadSubmit">Ya</button>', html)
+        self.assertIn('class="danger-button" id="cancelUploadSubmit">Batal</button>', html)
+        self.assertNotIn('id="guest-status-form-admin-889"', html)
+        self.assertNotIn('data-form-id="guest-status-form-admin-889"', html)
+        self.assertNotIn('class="secondary-button table-action-button guest-edit-toggle"', html)
+        self.assertIn("Staff Admin", html)
+        self.assertIn("Hapus", html)
 
     # Fungsi untuk memastikan halaman setting WhatsApp memakai UI No HP prefix +62.
     def test_whatsapp_settings_form_uses_phone_prefix_ui(self):

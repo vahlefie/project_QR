@@ -152,6 +152,8 @@ GUESTS_DEPS = (
     "build_guest_table_redirect",
     "build_guest_whatsapp_invite",
     "build_guest_edit_data",
+    "build_owner_guest_added_by",
+    "build_owner_guest_edited_by",
     "clean_guest_status",
     "db",
     "get_accessible_guest",

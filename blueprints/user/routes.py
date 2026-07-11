@@ -96,7 +96,11 @@ def create_user_blueprint(deps):
 
         should_update_duplicates = request.form.get("include_duplicates") == "yes"
         if should_update_duplicates:
-            saved_count = deps.replace_guest_rows(current_user, pending_upload["rows"])
+            saved_count = deps.replace_guest_rows(
+                current_user,
+                pending_upload["rows"],
+                edited_by=current_user.nama or current_user.username,
+            )
             message = f"{saved_count} data tamu berhasil diperbarui/disimpan."
         else:
             saved_count = deps.save_guest_rows(

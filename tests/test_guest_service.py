@@ -66,7 +66,7 @@ class GuestServiceTest(unittest.TestCase):
             },
         )
 
-    # Fungsi untuk memastikan sumber penambah tamu tersimpan pada manual, upload, dan replace.
+    # Fungsi untuk memastikan sumber penambah dan pengedit tamu tersimpan pada jalur berbeda.
     def test_guest_added_by_is_saved_from_actor_label(self):
         with app_module.app.app_context():
             existing_client = User.query.filter_by(username="added_by_client").first()
@@ -110,6 +110,13 @@ class GuestServiceTest(unittest.TestCase):
 
             self.assertIsNotNone(guest)
             self.assertEqual(guest.added_by, "added_by_client")
+            self.assertIsNone(guest.edited_by)
+            self.assertEqual(
+                guest_service.build_owner_guest_edited_by(
+                    SimpleNamespace(nama="Client Display", username="client_username")
+                ),
+                "Client Display",
+            )
             self.assertEqual(
                 guest_service.build_staff_guest_added_by(SimpleNamespace(nama="Staff Input", no_hp="62812999")),
                 "Staff Input",
@@ -126,13 +133,14 @@ class GuestServiceTest(unittest.TestCase):
                         "status": "VIP",
                     }
                 ],
-                added_by="Staff Input",
+                edited_by="Staff Input",
             )
             app_module.db.session.refresh(guest)
 
             self.assertEqual(guest.nama, "Tamu Upload Baru")
             self.assertEqual(guest.status, "VIP")
-            self.assertEqual(guest.added_by, "Staff Input")
+            self.assertEqual(guest.added_by, "added_by_client")
+            self.assertEqual(guest.edited_by, "Staff Input")
 
             Guests.query.filter_by(user_id=client.id).delete()
             app_module.db.session.delete(client)

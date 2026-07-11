@@ -930,7 +930,11 @@ def create_admin_blueprint(deps):
 
         should_update_duplicates = request.form.get("include_duplicates") == "yes"
         if should_update_duplicates:
-            saved_count = deps.replace_guest_rows(owner_user, pending_upload["rows"])
+            saved_count = deps.replace_guest_rows(
+                owner_user,
+                pending_upload["rows"],
+                edited_by=owner_user.username,
+            )
             message = f"{saved_count} data tamu berhasil diperbarui/disimpan."
         else:
             saved_count = deps.save_guest_rows(

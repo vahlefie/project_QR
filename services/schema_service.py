@@ -104,6 +104,11 @@ def ensure_guests_user_schema():
         db.session.commit()
         guest_columns.add("added_by")
 
+    if "edited_by" not in guest_columns:
+        db.session.execute(text(f"ALTER TABLE guests ADD COLUMN edited_by VARCHAR({GUEST_ADDED_BY_MAX_LENGTH})"))
+        db.session.commit()
+        guest_columns.add("edited_by")
+
     if "verified_by_staff_id" not in guest_columns:
         db.session.execute(text("ALTER TABLE guests ADD COLUMN verified_by_staff_id INTEGER"))
         db.session.commit()
@@ -120,10 +125,7 @@ def ensure_guests_user_schema():
         guest_columns.add("jumlah_orang")
 
     db.session.execute(
-        text(
-            "UPDATE guests SET jumlah_orang = 1 "
-            "WHERE jumlah_orang IS NULL OR jumlah_orang < 1 OR jumlah_orang > 9"
-        )
+        text("UPDATE guests SET jumlah_orang = 1 " "WHERE jumlah_orang IS NULL OR jumlah_orang < 1 OR jumlah_orang > 9")
     )
     db.session.commit()
 

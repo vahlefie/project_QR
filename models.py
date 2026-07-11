@@ -85,6 +85,7 @@ class Guests(db.Model):
     email = db.Column(db.String(30))
     status = db.Column(db.String(10), default=DEFAULT_GUEST_STATUS)
     added_by = db.Column(db.String(GUEST_ADDED_BY_MAX_LENGTH))
+    edited_by = db.Column(db.String(GUEST_ADDED_BY_MAX_LENGTH))
     kehadiran = db.Column(db.DateTime)
     jumlah_orang = db.Column(db.Integer, default=1, nullable=False)
     verified_by_staff_id = db.Column(db.Integer, db.ForeignKey("staff.id"), nullable=True)

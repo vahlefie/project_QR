@@ -182,6 +182,7 @@ class StaffRouteTest(unittest.TestCase):
             email=None,
             status="Reguler",
             added_by="Staff 1",
+            edited_by=None,
             kehadiran=None,
             verified_by_staff_name=None,
         )
@@ -209,7 +210,91 @@ class StaffRouteTest(unittest.TestCase):
             )
 
         self.assertIn("Edit", html)
+        self.assertIn("<th>Diedit</th>", html)
+        self.assertIn("<td>Staff 1</td>", html)
         self.assertNotIn('class="danger-button table-action-button guest-delete-toggle"', html)
+
+    # Fungsi untuk memastikan edit status staff mencatat nama staff pada kolom Diedit.
+    def test_staff_status_edit_records_staff_name_as_editor(self):
+        username = "staff_status_edit_owner"
+        with app_module.app.app_context():
+            StaffAccess.query.filter_by(token_hash="staff-status-edit-token").delete()
+            existing_owner = User.query.filter_by(username=username).first()
+            if existing_owner:
+                Guests.query.filter_by(user_id=existing_owner.id).delete()
+                for existing_staff in Staff.query.filter_by(owner_user_id=existing_owner.id).all():
+                    StaffAccess.query.filter_by(staff_id=existing_staff.id).delete()
+                    app_module.db.session.delete(existing_staff)
+                app_module.db.session.delete(existing_owner)
+                app_module.db.session.commit()
+
+            owner = User()
+            owner.username = username
+            owner.nama = "Staff Status Owner"
+            owner.email = f"{username}@example.com"
+            owner.no_hp = 628120050088
+            owner.role = app_module.ROLE_USER
+            app_module.db.session.add(owner)
+            app_module.db.session.commit()
+
+            staff = Staff()
+            staff.owner_user_id = owner.id
+            staff.nama = "Staff Editor"
+            staff.no_hp = "628120050087"
+            app_module.db.session.add(staff)
+            app_module.db.session.commit()
+
+            guest = Guests()
+            guest.no = 1
+            guest.nama = "Guest Status"
+            guest.no_hp = "628120050086"
+            guest.status = app_module.DEFAULT_GUEST_STATUS
+            guest.user_id = owner.id
+            app_module.db.session.add(guest)
+
+            staff_access = StaffAccess()
+            staff_access.staff_id = staff.id
+            staff_access.token_hash = "staff-status-edit-token"
+            staff_access.pin_hash = "pin"
+            staff_access.last_activity_at = app_module.staff_service.get_utc_naive_datetime()
+            app_module.db.session.add(staff_access)
+            app_module.db.session.commit()
+
+            guest_id = guest.id
+            session_cookie = app_module.staff_service.get_staff_session_serializer().dumps(
+                {"staff_access_id": staff_access.id}
+            )
+
+        try:
+            self.client.set_cookie(STAFF_SESSION_COOKIE_NAME, session_cookie)
+            response = self.client.post(f"/staff/guests/{guest_id}/status", data={"status": "VIP"})
+
+            self.assertEqual(response.status_code, 302)
+            with app_module.app.app_context():
+                guest = app_module.db.session.get(Guests, guest_id)
+                self.assertEqual(guest.status, "VIP")
+                self.assertEqual(guest.edited_by, "Staff Editor")
+
+                guest.kehadiran = app_module.get_utc_naive_datetime()
+                app_module.db.session.commit()
+
+            response = self.client.post(f"/staff/guests/{guest_id}/status", data={"status": "Reguler"})
+
+            self.assertEqual(response.status_code, 403)
+            self.assertIn("sudah terverifikasi kehadirannya", response.get_data(as_text=True))
+            with app_module.app.app_context():
+                guest = app_module.db.session.get(Guests, guest_id)
+                self.assertEqual(guest.status, "VIP")
+        finally:
+            with app_module.app.app_context():
+                owner = User.query.filter_by(username=username).first()
+                if owner:
+                    Guests.query.filter_by(user_id=owner.id).delete()
+                    for staff in Staff.query.filter_by(owner_user_id=owner.id).all():
+                        StaffAccess.query.filter_by(staff_id=staff.id).delete()
+                        app_module.db.session.delete(staff)
+                    app_module.db.session.delete(owner)
+                    app_module.db.session.commit()
 
     # Fungsi untuk memastikan route hapus tamu staff menolak request langsung.
     def test_staff_delete_guest_route_is_forbidden(self):

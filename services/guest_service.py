@@ -279,6 +279,13 @@ def build_owner_guest_added_by(owner_user):
     return clean_guest_added_by(getattr(owner_user, "username", "") or getattr(owner_user, "nama", ""))
 
 
+# Fungsi untuk mengambil label pengedit tamu dari akun client.
+def build_owner_guest_edited_by(owner_user):
+    if not owner_user:
+        return None
+    return clean_guest_added_by(getattr(owner_user, "nama", "") or getattr(owner_user, "username", ""))
+
+
 # Fungsi untuk mengambil label penambah tamu dari akun staff.
 def build_staff_guest_added_by(staff):
     if not staff:
@@ -387,7 +394,7 @@ def guest_matches_row(guest, row):
 
 
 # Fungsi untuk memperbarui tamu dari baris.
-def update_guest_from_row(guest, row, added_by=None):
+def update_guest_from_row(guest, row, added_by=None, edited_by=None):
     guest.no = row.get("no") or 0
     guest.nama = row.get("nama")
     guest.no_hp = row.get("no_hp")
@@ -396,6 +403,9 @@ def update_guest_from_row(guest, row, added_by=None):
     source_label = clean_guest_added_by(added_by or row.get("added_by"))
     if source_label:
         guest.added_by = source_label
+    editor_label = clean_guest_added_by(edited_by or row.get("edited_by"))
+    if editor_label:
+        guest.edited_by = editor_label
 
 
 # Fungsi untuk mengambil nomor urut tamu berikutnya.
@@ -576,9 +586,10 @@ def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates
 
 
 # Fungsi untuk mengganti baris tamu.
-def replace_guest_rows(owner_user, rows, added_by=None):
+def replace_guest_rows(owner_user, rows, added_by=None, edited_by=None):
     affected_count = 0
-    source_label = clean_guest_added_by(added_by) or build_owner_guest_added_by(owner_user)
+    added_label = clean_guest_added_by(added_by) or build_owner_guest_added_by(owner_user)
+    edited_label = clean_guest_added_by(edited_by) or added_label
 
     for row in rows:
         existing_guests = Guests.query.filter_by(user_id=owner_user.id).order_by(Guests.id.asc()).all()
@@ -586,13 +597,13 @@ def replace_guest_rows(owner_user, rows, added_by=None):
 
         if matching_guests:
             target_guest = matching_guests[0]
-            update_guest_from_row(target_guest, row, added_by=source_label)
+            update_guest_from_row(target_guest, row, edited_by=edited_label)
             for duplicate_guest in matching_guests[1:]:
                 db.session.delete(duplicate_guest)
         else:
             guest = Guests()
             guest.user_id = owner_user.id
-            update_guest_from_row(guest, row, added_by=source_label)
+            update_guest_from_row(guest, row, added_by=added_label)
             db.session.add(guest)
 
         affected_count += 1

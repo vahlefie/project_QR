@@ -206,9 +206,14 @@ def create_staff_blueprint(deps):
         guest = deps.get_accessible_staff_guest(staff, guest_id)
         if not guest:
             return "Data tamu tidak ditemukan", 404
+        if guest.kehadiran:
+            return "Data tamu sudah terverifikasi kehadirannya. Edit data tamu dinonaktifkan.", 403
 
         old_status = guest.status
         guest.status = deps.clean_guest_status(request.form.get("status"))
+        editor_label = deps.build_staff_guest_added_by(staff)
+        if editor_label:
+            guest.edited_by = editor_label
         deps.db.session.commit()
         deps.log_staff_activity_event(
             "UPDATE_GUEST_STATUS",

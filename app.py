@@ -968,8 +968,8 @@ def guest_matches_row(guest, row):
 
 
 # Fungsi untuk memperbarui data tamu dengan data dari satu baris Excel jika cocok
-def update_guest_from_row(guest, row, added_by=None):
-    guest_service.update_guest_from_row(guest, row, added_by=added_by)
+def update_guest_from_row(guest, row, added_by=None, edited_by=None):
+    guest_service.update_guest_from_row(guest, row, added_by=added_by, edited_by=edited_by)
 
 
 # Fungsi untuk mendapatkan nomor urut tamu berikutnya untuk pemilik tertentu
@@ -980,6 +980,11 @@ def get_next_guest_no(owner_user_id):
 # Fungsi untuk mengambil label penambah tamu dari akun client pemilik data.
 def build_owner_guest_added_by(owner_user):
     return guest_service.build_owner_guest_added_by(owner_user)
+
+
+# Fungsi untuk mengambil label pengedit tamu dari akun client.
+def build_owner_guest_edited_by(owner_user):
+    return guest_service.build_owner_guest_edited_by(owner_user)
 
 
 # Fungsi untuk mengambil label penambah tamu dari akun staff.
@@ -1053,8 +1058,8 @@ def save_guest_rows(owner_user, rows, duplicate_indexes=None, include_duplicates
 
 
 # Fungsi untuk mengganti data tamu yang sudah ada dengan data dari file upload jika user memilih opsi replace
-def replace_guest_rows(owner_user, rows, added_by=None):
-    return guest_service.replace_guest_rows(owner_user, rows, added_by=added_by)
+def replace_guest_rows(owner_user, rows, added_by=None, edited_by=None):
+    return guest_service.replace_guest_rows(owner_user, rows, added_by=added_by, edited_by=edited_by)
 
 
 # Fungsi untuk membangun path file pending upload berdasarkan id session
@@ -1246,6 +1251,7 @@ def build_blueprint_dependencies():
         build_guest_upload_preview=build_guest_upload_preview,
         build_guest_whatsapp_invite=build_guest_whatsapp_invite,
         build_owner_guest_added_by=build_owner_guest_added_by,
+        build_owner_guest_edited_by=build_owner_guest_edited_by,
         build_qr_already_verified_message=build_qr_already_verified_message,
         build_qr_welcome_message=build_qr_welcome_message,
         build_manual_guest_data=build_manual_guest_data,

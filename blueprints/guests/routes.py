@@ -14,6 +14,14 @@ def create_guests_blueprint(deps):
             and not deps.is_owner_in_active_billing_period(current_user)
         )
 
+    # Fungsi untuk menentukan label pengedit tamu sesuai role akun yang mengubah data.
+    def build_guest_editor_label(current_user, guest):
+        if not current_user:
+            return None
+        if current_user.role == deps.ROLE_USER:
+            return deps.build_owner_guest_edited_by(current_user)
+        return deps.build_owner_guest_added_by(getattr(guest, "owner", None))
+
     # Fungsi untuk memperbarui status tamu oleh user/admin.
     @guests_bp.route("/guests/<int:guest_id>/status", methods=["POST"])
     @deps.login_required
@@ -25,6 +33,8 @@ def create_guests_blueprint(deps):
             return "Data tamu tidak ditemukan", 404
         if is_inactive_client_request():
             return "Client tidak aktif. Edit data tamu dinonaktifkan.", 403
+        if guest.kehadiran:
+            return "Data tamu sudah terverifikasi kehadirannya. Edit data tamu dinonaktifkan.", 403
 
         current_user = deps.get_current_user()
         is_client_full_edit = bool(
@@ -49,6 +59,9 @@ def create_guests_blueprint(deps):
             guest.no_hp = guest_data["no_hp"]
             guest.email = guest_data["email"]
             guest.status = guest_data["status"]
+            editor_label = build_guest_editor_label(current_user, guest)
+            if editor_label:
+                guest.edited_by = editor_label
             deps.db.session.commit()
             deps.log_activity_event(
                 "UPDATE_GUEST_ROW",
@@ -63,6 +76,9 @@ def create_guests_blueprint(deps):
 
         old_status = guest.status
         guest.status = deps.clean_guest_status(request.form.get("status"))
+        editor_label = build_guest_editor_label(current_user, guest)
+        if editor_label:
+            guest.edited_by = editor_label
         deps.db.session.commit()
         deps.log_activity_event(
             "UPDATE_GUEST_STATUS",

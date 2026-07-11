@@ -59,6 +59,28 @@ class GuestRouteTest(unittest.TestCase):
 
         return account_id
 
+    # Fungsi untuk membuat session admin aktif pada test client.
+    def login_as_admin(self, username="guest_route_admin"):
+        active_session_token = "active-guest-route-admin-token"
+        with app_module.app.app_context():
+            User.query.filter_by(username=username).delete()
+            User.query.filter_by(no_hp=6281200044002).delete()
+            admin = User()
+            admin.username = username
+            admin.nama = "Guest Route Admin"
+            admin.email = f"{username}@example.com"
+            admin.no_hp = 6281200044002
+            admin.role = app_module.ROLE_ADMIN
+            admin.active_session_token = active_session_token
+            app_module.db.session.add(admin)
+            app_module.db.session.commit()
+
+        with self.client.session_transaction() as session:
+            session["user"] = username
+            session["role"] = app_module.ROLE_ADMIN
+            session[SESSION_ACTIVE_TOKEN_KEY] = active_session_token
+            session[SESSION_LAST_ACTIVITY_KEY] = app_module.auth_service.get_current_timestamp()
+
     # Fungsi untuk memastikan route update/hapus tamu wajib login.
     def test_guest_mutation_routes_require_login(self):
         protected_requests = (
@@ -150,6 +172,27 @@ class GuestRouteTest(unittest.TestCase):
             self.assertEqual(guest.no_hp, "6281200022222")
             self.assertEqual(guest.email, "baru@example.com")
             self.assertEqual(guest.status, "VIP")
+            self.assertEqual(guest.edited_by, "Guest Route User")
+
+            guest.kehadiran = app_module.get_utc_naive_datetime()
+            app_module.db.session.commit()
+
+        response = self.client.post(
+            f"/guests/{guest_id}/status",
+            data={
+                "nama": "nama ditolak",
+                "no_hp": "081200044444",
+                "email": "ditolak@example.com",
+                "status": "Reguler",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("sudah terverifikasi kehadirannya", response.get_data(as_text=True))
+        with app_module.app.app_context():
+            guest = app_module.db.session.get(Guests, guest_id)
+            self.assertEqual(guest.nama, "Nama Baru")
+            self.assertEqual(guest.status, "VIP")
 
             Guests.query.filter_by(user_id=owner_user_id).delete()
             BillingPayment.query.filter_by(user_id=owner_user_id).delete()
@@ -181,6 +224,59 @@ class GuestRouteTest(unittest.TestCase):
             BillingPayment.query.filter_by(user_id=owner_user_id).delete()
             User.query.filter_by(username="guest_manual_added_by_user").delete()
             app_module.db.session.commit()
+
+    # Fungsi untuk memastikan admin mencatat username client sebagai pengedit tamu.
+    def test_admin_guest_status_edit_records_owner_username_as_editor(self):
+        self.login_as_admin("guest_status_admin")
+        owner_username = "admin_edit_owner"
+
+        with app_module.app.app_context():
+            User.query.filter_by(username=owner_username).delete()
+            User.query.filter_by(no_hp=6281200044003).delete()
+            owner = User()
+            owner.username = owner_username
+            owner.nama = "Admin Edit Owner"
+            owner.email = f"{owner_username}@example.com"
+            owner.no_hp = 6281200044003
+            owner.role = app_module.ROLE_USER
+            app_module.db.session.add(owner)
+            app_module.db.session.commit()
+
+            guest = Guests()
+            guest.nama = "Admin Status Guest"
+            guest.no_hp = "6281200044004"
+            guest.status = "Reguler"
+            guest.user_id = owner.id
+            app_module.db.session.add(guest)
+            app_module.db.session.commit()
+            guest_id = guest.id
+            owner_id = owner.id
+
+        try:
+            response = self.client.post(f"/guests/{guest_id}/status", data={"status": "VIP"})
+
+            self.assertEqual(response.status_code, 302)
+            with app_module.app.app_context():
+                guest = app_module.db.session.get(Guests, guest_id)
+                self.assertEqual(guest.status, "VIP")
+                self.assertEqual(guest.edited_by, owner_username)
+
+                guest.kehadiran = app_module.get_utc_naive_datetime()
+                app_module.db.session.commit()
+
+            response = self.client.post(f"/guests/{guest_id}/status", data={"status": "Reguler"})
+
+            self.assertEqual(response.status_code, 403)
+            self.assertIn("sudah terverifikasi kehadirannya", response.get_data(as_text=True))
+            with app_module.app.app_context():
+                guest = app_module.db.session.get(Guests, guest_id)
+                self.assertEqual(guest.status, "VIP")
+        finally:
+            with app_module.app.app_context():
+                Guests.query.filter_by(user_id=owner_id).delete()
+                User.query.filter_by(username=owner_username).delete()
+                User.query.filter_by(username="guest_status_admin").delete()
+                app_module.db.session.commit()
 
 
 if __name__ == "__main__":
